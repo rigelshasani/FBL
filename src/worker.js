@@ -4,7 +4,7 @@
  */
 
 import { requireAuth } from './middleware/auth.js';
-import { handleLockScreen, handleLockSubmit } from './routes/lock.js';
+import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -32,6 +32,16 @@ export default {
           return await handleLockScreen(request, env);
         } else if (method === 'POST') {
           return await handleLockSubmit(request, env);
+        }
+      }
+      
+      // One-time view route (no auth middleware - handles its own validation)
+      if (url.pathname.startsWith('/view/')) {
+        const pathParts = url.pathname.split('/');
+        if (pathParts.length === 4) {
+          const token = pathParts[2];
+          const timestamp = pathParts[3];
+          return await handleOneTimeView(request, env, token, timestamp);
         }
       }
       
@@ -75,8 +85,8 @@ async function handleHomePage(request, env) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FBL Gothic Library</title>
-  <meta name="description" content="Gothic digital library - authenticated">
+  <title>Cemetery of Forgotten Books</title>
+  <meta name="description" content="Cemetery of forgotten books - authenticated">
   <meta name="robots" content="noindex, nofollow">
   <style>
     * {
@@ -171,13 +181,13 @@ async function handleHomePage(request, env) {
 <body>
   <div class="container">
     <header class="header">
-      <h1>FBL</h1>
-      <p class="subtitle">Gothic Digital Library</p>
+      <h1>CFB</h1>
+      <p class="subtitle">Cemetery of Forgotten Books</p>
     </header>
     
     <div class="welcome">
-      <h2>Welcome to the Library</h2>
-      <p>You have successfully entered the gothic digital sanctuary.</p>
+      <h2>Welcome to the Cemetery</h2>
+      <p>You have successfully entered the cemetery of forgotten books.</p>
       
       <div class="status-grid">
         <div class="status-card">
