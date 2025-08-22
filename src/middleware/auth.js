@@ -6,6 +6,7 @@ import { validateAuthCookie } from '../auth/gate.js';
 
 /**
  * Middleware to protect routes behind authentication gate
+ * STATELESS MODE: No cookies, password required on every request
  * @param {Request} request - HTTP request
  * @param {object} env - Environment variables
  * @returns {Response|null} Response if auth fails, null if auth succeeds
@@ -17,32 +18,25 @@ export async function requireAuth(request, env) {
     return null;
   }
   
-  // Check for auth cookie
-  const cookieHeader = request.headers.get('Cookie');
-  const isValid = await validateAuthCookie(cookieHeader, env.SECRET_SEED);
-  
-  if (!isValid) {
-    // Redirect to lock screen for HTML requests
-    const acceptHeader = request.headers.get('Accept') || '';
-    if (acceptHeader.includes('text/html')) {
-      return new Response(null, {
-        status: 302,
-        headers: {
-          'Location': '/lock',
-          'Cache-Control': 'no-cache, no-store, must-revalidate'
-        }
-      });
-    }
-    
-    // Return 401 for API requests
-    return new Response(JSON.stringify({ error: 'Authentication required' }), {
-      status: 401,
-      headers: { 
-        'Content-Type': 'application/json',
+  // ALWAYS redirect to lock screen - no persistent sessions
+  // This ensures maximum security with no traces
+  const acceptHeader = request.headers.get('Accept') || '';
+  if (acceptHeader.includes('text/html')) {
+    return new Response(null, {
+      status: 302,
+      headers: {
+        'Location': '/lock',
         'Cache-Control': 'no-cache, no-store, must-revalidate'
       }
     });
   }
   
-  return null; // Auth successful, continue to route handler
+  // Return 401 for API requests - require auth on every call
+  return new Response(JSON.stringify({ error: 'Authentication required' }), {
+    status: 401,
+    headers: { 
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
+    }
+  });
 }
