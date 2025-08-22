@@ -12,14 +12,25 @@ import { validateAuthCookie } from '../auth/gate.js';
  * @returns {Response|null} Response if auth fails, null if auth succeeds
  */
 export async function requireAuth(request, env) {
-  // Skip auth for lock endpoint
+  // Skip auth for lock endpoint and one-time view pages
   const url = new URL(request.url);
-  if (url.pathname === '/lock' || url.pathname === '/health') {
+  if (url.pathname === '/lock' || 
+      url.pathname === '/health' || 
+      url.pathname.startsWith('/view/')) {
     return null;
   }
   
+  // For API requests, check if there's a valid referrer from one-time view
+  const referrer = request.headers.get('Referer');
+  if (url.pathname.startsWith('/api/') && referrer) {
+    const referrerUrl = new URL(referrer);
+    if (referrerUrl.pathname.startsWith('/view/')) {
+      // Allow API calls from one-time view pages
+      return null;
+    }
+  }
+  
   // ALWAYS redirect to lock screen - no persistent sessions
-  // This ensures maximum security with no traces
   const acceptHeader = request.headers.get('Accept') || '';
   if (acceptHeader.includes('text/html')) {
     return new Response(null, {

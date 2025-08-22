@@ -486,6 +486,17 @@ async function showMainContent(request, env) {
   </div>
   
   <script>
+    // Prevent caching and auto-expire
+    if (performance.navigation.type === 1) {
+      // Page was refreshed - immediately redirect to lock
+      window.location.href = '/lock';
+    }
+    
+    // Auto-expire after 30 seconds
+    setTimeout(() => {
+      window.location.href = '/lock';
+    }, 30000);
+    
     // Load book count from API
     fetch('/api/books?limit=1')
       .then(response => response.json())
@@ -498,6 +509,13 @@ async function showMainContent(request, env) {
         console.error('Failed to load book count:', error);
         document.getElementById('book-count').textContent = 'Unknown';
       });
+      
+    // Prevent back button caching
+    window.addEventListener('pageshow', function(event) {
+      if (event.persisted) {
+        window.location.href = '/lock';
+      }
+    });
   </script>
 </body>
 </html>`;
@@ -505,9 +523,11 @@ async function showMainContent(request, env) {
   return new Response(html, {
     headers: { 
       'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
       'Pragma': 'no-cache',
-      'Expires': '0'
+      'Expires': '0',
+      'X-Frame-Options': 'DENY',
+      'Vary': '*'
     }
   });
 }
