@@ -5,6 +5,13 @@
 
 import { requireAuth } from './middleware/auth.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
+import { 
+  handleBooksAPI,
+  handleBookDetailAPI, 
+  handleCategoriesAPI,
+  handleSearchAPI,
+  handleCategoryBooksAPI
+} from './routes/api.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -49,6 +56,38 @@ export default {
       const authResponse = await requireAuth(request, env);
       if (authResponse) {
         return authResponse;
+      }
+      
+      // API routes (authenticated)
+      if (url.pathname.startsWith('/api/')) {
+        if (url.pathname === '/api/books') {
+          return await handleBooksAPI(request, env);
+        }
+        
+        if (url.pathname === '/api/categories') {
+          return await handleCategoriesAPI(request, env);
+        }
+        
+        if (url.pathname === '/api/search') {
+          return await handleSearchAPI(request, env);
+        }
+        
+        // Books detail API
+        const bookMatch = url.pathname.match(/^\/api\/books\/([^\/]+)$/);
+        if (bookMatch) {
+          return await handleBookDetailAPI(request, env, bookMatch[1]);
+        }
+        
+        // Category books API
+        const categoryMatch = url.pathname.match(/^\/api\/categories\/([^\/]+)\/books$/);
+        if (categoryMatch) {
+          return await handleCategoryBooksAPI(request, env, categoryMatch[1]);
+        }
+        
+        return new Response(JSON.stringify({ error: 'API endpoint not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
       }
       
       // Protected routes

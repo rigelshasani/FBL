@@ -463,7 +463,7 @@ async function showMainContent(request, env) {
         </div>
         <div class="status-card">
           <h3>Catalog</h3>
-          <p>0 books interred</p>
+          <p id="book-count">Loading...</p>
         </div>
         <div class="status-card">
           <h3>Search</h3>
@@ -484,6 +484,21 @@ async function showMainContent(request, env) {
       <p>⚠️ STATELESS SESSION: No data persists. Refresh requires re-authentication for maximum security.</p>
     </div>
   </div>
+  
+  <script>
+    // Load book count from API
+    fetch('/api/books?limit=1')
+      .then(response => response.json())
+      .then(data => {
+        const count = data.pagination?.total || 0;
+        const bookCountEl = document.getElementById('book-count');
+        bookCountEl.textContent = count === 0 ? 'Empty cemetery' : count + ' books interred';
+      })
+      .catch(error => {
+        console.error('Failed to load book count:', error);
+        document.getElementById('book-count').textContent = 'Unknown';
+      });
+  </script>
 </body>
 </html>`;
 
