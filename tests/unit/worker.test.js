@@ -52,7 +52,7 @@ describe('Worker', () => {
     
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
-    expect(body).toContain('FBL Gothic Library - Enter');
+    expect(body).toContain('Cemetery of Forgotten Books - Enter');
     expect(body).toContain('Daily Password');
   });
   

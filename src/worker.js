@@ -5,6 +5,7 @@
 
 import { requireAuth } from './middleware/auth.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
+import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -95,6 +96,16 @@ export default {
         return await handleHomePage(request, env);
       }
       
+      if (url.pathname === '/books') {
+        return await handleBooksPage(request, env);
+      }
+      
+      // Book detail page
+      const bookPageMatch = url.pathname.match(/^\/books\/([^\/]+)$/);
+      if (bookPageMatch) {
+        return await handleBookDetailPage(request, env, bookPageMatch[1]);
+      }
+      
       // Static assets (served by Cloudflare Pages)
       if (url.pathname.startsWith('/static/') || 
           url.pathname.endsWith('.css') || 
@@ -116,149 +127,15 @@ export default {
 };
 
 /**
- * Handle authenticated home page
+ * Handle authenticated home page - redirect to one-time view
  */
 async function handleHomePage(request, env) {
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cemetery of Forgotten Books</title>
-  <meta name="description" content="Cemetery of forgotten books - authenticated">
-  <meta name="robots" content="noindex, nofollow">
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-    
-    body {
-      font-family: Georgia, 'Times New Roman', serif;
-      background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%);
-      color: #e8e8e8;
-      min-height: 100vh;
-      padding: 2rem;
-    }
-    
-    .header {
-      text-align: center;
-      margin-bottom: 3rem;
-    }
-    
-    .header h1 {
-      font-size: 3rem;
-      font-weight: 300;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      margin-bottom: 0.5rem;
-    }
-    
-    .header .subtitle {
-      font-size: 1.2rem;
-      opacity: 0.7;
-      font-style: italic;
-    }
-    
-    .container {
-      max-width: 1200px;
-      margin: 0 auto;
-    }
-    
-    .welcome {
-      text-align: center;
-      padding: 3rem;
-      background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 8px;
-      margin-bottom: 2rem;
-    }
-    
-    .welcome h2 {
-      font-size: 2rem;
-      margin-bottom: 1rem;
-      color: #d4af37;
-    }
-    
-    .status-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-      gap: 1.5rem;
-      margin-top: 2rem;
-    }
-    
-    .status-card {
-      background: rgba(0, 0, 0, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      padding: 1.5rem;
-    }
-    
-    .status-card h3 {
-      font-size: 1.1rem;
-      margin-bottom: 0.5rem;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      color: #b8860b;
-    }
-    
-    .status-card p {
-      opacity: 0.8;
-      font-family: 'Courier New', monospace;
-      font-size: 0.9rem;
-    }
-    
-    .footer {
-      text-align: center;
-      margin-top: 3rem;
-      opacity: 0.5;
-      font-size: 0.9rem;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header class="header">
-      <h1>CFB</h1>
-      <p class="subtitle">Cemetery of Forgotten Books</p>
-    </header>
-    
-    <div class="welcome">
-      <h2>Welcome to the Cemetery</h2>
-      <p>You have successfully entered the cemetery of forgotten books.</p>
-      
-      <div class="status-grid">
-        <div class="status-card">
-          <h3>Gate Status</h3>
-          <p>Authenticated ✓</p>
-        </div>
-        <div class="status-card">
-          <h3>Catalog</h3>
-          <p>0 books available</p>
-        </div>
-        <div class="status-card">
-          <h3>Search</h3>
-          <p>Ready for queries</p>
-        </div>
-        <div class="status-card">
-          <h3>System</h3>
-          <p>Under construction</p>
-        </div>
-      </div>
-    </div>
-    
-    <div class="footer">
-      <p>Access expires at midnight (Europe/Tirane)</p>
-    </div>
-  </div>
-</body>
-</html>`;
-
-  return new Response(html, {
-    headers: { 
-      'Content-Type': 'text/html; charset=utf-8',
-      'Cache-Control': 'private, max-age=300'
+  // Redirect authenticated home page requests to lock screen for one-time view
+  return new Response(null, {
+    status: 302,
+    headers: {
+      'Location': '/lock',
+      'Cache-Control': 'no-cache, no-store, must-revalidate'
     }
   });
 }

@@ -350,6 +350,32 @@ async function showMainContent(request, env) {
       color: #d4af37;
     }
     
+    .nav-links {
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      margin-top: 2rem;
+      flex-wrap: wrap;
+    }
+    
+    .nav-links a {
+      background: rgba(139, 0, 0, 0.3);
+      border: 1px solid #8B0000;
+      padding: 0.8rem 1.5rem;
+      border-radius: 4px;
+      color: #e8e8e8;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      text-transform: uppercase;
+      font-size: 0.9rem;
+      letter-spacing: 1px;
+    }
+    
+    .nav-links a:hover {
+      background: rgba(139, 0, 0, 0.5);
+      transform: translateY(-2px);
+    }
+    
     .status-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -455,6 +481,10 @@ async function showMainContent(request, env) {
     <div class="welcome">
       <h2>Welcome to the Cemetery</h2>
       <p>You have successfully entered the cemetery of forgotten books.</p>
+      
+      <div class="nav-links">
+        <a href="/books">Browse Books</a>
+      </div>
       
       <div class="status-grid">
         <div class="status-card">
