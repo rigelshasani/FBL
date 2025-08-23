@@ -6,6 +6,7 @@
 import { requireAuth } from './middleware/auth.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
+import { handleAdminPage } from './routes/admin.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -98,6 +99,10 @@ export default {
       
       if (url.pathname === '/books') {
         return await handleBooksPage(request, env);
+      }
+      
+      if (url.pathname === '/admin') {
+        return await handleAdminPage(request, env);
       }
       
       // Book detail page

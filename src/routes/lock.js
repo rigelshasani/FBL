@@ -484,6 +484,7 @@ async function showMainContent(request, env) {
       
       <div class="nav-links">
         <a href="/books">Browse Books</a>
+        <a href="/admin">Admin Panel</a>
       </div>
       
       <div class="status-grid">
@@ -510,9 +511,6 @@ async function showMainContent(request, env) {
       </div>
     </div>
     
-    <div class="footer">
-      <p>⚠️ STATELESS SESSION: No data persists. Refresh requires re-authentication for maximum security.</p>
-    </div>
   </div>
   
   <script>

@@ -1,6 +1,6 @@
 /**
  * Gate authentication system with daily password rotation
- * Password resets at midnight Europe/Tirane timezone
+ * Password resets at midnight UTC timezone
  */
 
 /**
@@ -14,9 +14,9 @@ export async function generateDailyPassword(secretSeed, date = new Date()) {
     throw new Error('SECRET_SEED is required');
   }
   
-  // Get date in Europe/Tirane timezone
-  const tiranaDate = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Tirane' }));
-  const dateString = tiranaDate.toISOString().split('T')[0]; // YYYY-MM-DD
+  // Get date in UTC timezone
+  const utcDate = new Date(date.toISOString().split('T')[0] + 'T00:00:00.000Z');
+  const dateString = utcDate.toISOString().split('T')[0]; // YYYY-MM-DD
   
   // Create HMAC-SHA256
   const hmac = await hmacSHA256(secretSeed, dateString);
@@ -24,21 +24,15 @@ export async function generateDailyPassword(secretSeed, date = new Date()) {
 }
 
 /**
- * Get midnight timestamp for Europe/Tirane timezone
+ * Get midnight timestamp for UTC timezone
  * @param {Date} date - Reference date (defaults to today)  
- * @returns {Date} Next midnight in Tirane timezone
+ * @returns {Date} Next midnight in UTC timezone
  */
-export function getTiranaMidnight(date = new Date()) {
-  // Create date in Tirane timezone
-  const tiranaTime = new Date(date.toLocaleString('en-US', { timeZone: 'Europe/Tirane' }));
-  
-  // Set to next midnight
-  const midnight = new Date(tiranaTime);
-  midnight.setHours(24, 0, 0, 0);
-  
-  // Convert back to UTC
-  const offset = tiranaTime.getTimezoneOffset() - date.getTimezoneOffset();
-  return new Date(midnight.getTime() - (offset * 60 * 1000));
+export function getUTCMidnight(date = new Date()) {
+  // Get next midnight in UTC
+  const midnight = new Date(date);
+  midnight.setUTCHours(24, 0, 0, 0);
+  return midnight;
 }
 
 /**
@@ -97,8 +91,8 @@ export async function validateAuthCookie(cookieHeader, secretSeed) {
     
     // Check if cookie is still valid (not past midnight)
     const now = new Date();
-    const todayTirana = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Tirane' }));
-    const todayDate = todayTirana.toISOString().split('T')[0];
+    const todayUTC = new Date(now.toISOString().split('T')[0] + 'T00:00:00.000Z');
+    const todayDate = todayUTC.toISOString().split('T')[0];
     
     return issued === todayDate;
     
