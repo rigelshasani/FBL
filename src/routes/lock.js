@@ -484,7 +484,6 @@ async function showMainContent(request, env) {
       
       <div class="nav-links">
         <a href="/books">Browse Books</a>
-        <a href="/admin">Admin Panel</a>
       </div>
       
       <div class="status-grid">

@@ -16,7 +16,9 @@ export async function requireAuth(request, env) {
   const url = new URL(request.url);
   if (url.pathname === '/lock' || 
       url.pathname === '/health' || 
-      url.pathname.startsWith('/view/')) {
+      url.pathname === '/admin' ||
+      url.pathname.startsWith('/view/') ||
+      url.pathname.startsWith('/admin/panel/')) {
     return null;
   }
   

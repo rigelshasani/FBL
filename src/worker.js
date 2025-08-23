@@ -6,7 +6,7 @@
 import { requireAuth } from './middleware/auth.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
-import { handleAdminPage } from './routes/admin.js';
+import { handleAdminLogin, handleAdminSubmit, handleAdminPanel } from './routes/admin.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -102,7 +102,19 @@ export default {
       }
       
       if (url.pathname === '/admin') {
-        return await handleAdminPage(request, env);
+        if (method === 'GET') {
+          return await handleAdminLogin(request, env);
+        } else if (method === 'POST') {
+          return await handleAdminSubmit(request, env);
+        }
+      }
+      
+      // Admin panel route (authenticated)
+      const adminPanelMatch = url.pathname.match(/^\/admin\/panel\/([^\/]+)\/([^\/]+)$/);
+      if (adminPanelMatch) {
+        const token = adminPanelMatch[1];
+        const timestamp = adminPanelMatch[2];
+        return await handleAdminPanel(request, env, token, timestamp);
       }
       
       // Book detail page

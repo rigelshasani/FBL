@@ -64,10 +64,6 @@ async function testAuth() {
           
           if (html.includes('Browse Books')) {
             console.log('✅ Browse Books link found!');
-          }
-          
-          if (html.includes('Admin Panel')) {
-            console.log('✅ Admin Panel link found!');
             
             // Test books page
             const booksResponse = await fetch(`http://localhost:8788/books`, {
@@ -97,24 +93,6 @@ async function testAuth() {
               if (apiResponse.ok) {
                 const apiData = await apiResponse.json();
                 console.log('✅ Books API works! Books found:', apiData.books?.length || 0);
-              }
-            }
-            
-            // Test admin page
-            const adminResponse = await fetch(`http://localhost:8788/admin`, {
-              headers: {
-                'Referer': `http://localhost:8788${location}`
-              }
-            });
-            
-            console.log('Admin page status:', adminResponse.status);
-            if (adminResponse.ok) {
-              const adminHtml = await adminResponse.text();
-              if (adminHtml.includes('Admin Panel')) {
-                console.log('✅ Admin page loads!');
-              }
-              if (adminHtml.includes('Daily Password')) {
-                console.log('✅ Daily password section found!');
               }
             }
           }
