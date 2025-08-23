@@ -5,29 +5,37 @@
  */
 async function getPasswords() {
   const secretSeed = 'demo-secret-for-testing-12345';
+  const adminSecretSeed = 'admin-secret-cfb-67890';
   
   // Get date in UTC timezone
   const utcDate = new Date(new Date().toISOString().split('T')[0] + 'T00:00:00.000Z');
   const dateStr = utcDate.toISOString().split('T')[0]; // YYYY-MM-DD
   
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
+  
+  // User password (using user secret seed)
+  const userKey = await crypto.subtle.importKey(
     'raw', 
     encoder.encode(secretSeed),
     { name: 'HMAC', hash: 'SHA-256' },
     false,
     ['sign']
   );
-  
-  // User password
-  const userSignature = await crypto.subtle.sign('HMAC', key, encoder.encode(dateStr));
+  const userSignature = await crypto.subtle.sign('HMAC', userKey, encoder.encode(dateStr));
   const userPassword = Array.from(new Uint8Array(userSignature))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')
     .slice(0, 8);
   
-  // Admin password
-  const adminSignature = await crypto.subtle.sign('HMAC', key, encoder.encode(`admin:${dateStr}`));
+  // Admin password (using admin secret seed)
+  const adminKey = await crypto.subtle.importKey(
+    'raw', 
+    encoder.encode(adminSecretSeed),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const adminSignature = await crypto.subtle.sign('HMAC', adminKey, encoder.encode(`admin:${dateStr}`));
   const adminPassword = Array.from(new Uint8Array(adminSignature))
     .map(b => b.toString(16).padStart(2, '0'))
     .join('')

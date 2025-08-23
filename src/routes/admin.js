@@ -7,9 +7,9 @@ import { generateDailyPassword } from '../auth/gate.js';
 /**
  * Generate admin password using HMAC-SHA256
  */
-async function generateAdminPassword(secretSeed, date = new Date()) {
-  if (!secretSeed) {
-    throw new Error('SECRET_SEED is required');
+async function generateAdminPassword(adminSecretSeed, date = new Date()) {
+  if (!adminSecretSeed) {
+    throw new Error('ADMIN_SECRET_SEED is required');
   }
   
   // Get date in UTC timezone  
@@ -18,7 +18,7 @@ async function generateAdminPassword(secretSeed, date = new Date()) {
   
   // Create HMAC-SHA256 with 'admin' prefix to make it different from user password
   const encoder = new TextEncoder();
-  const keyData = encoder.encode(secretSeed);
+  const keyData = encoder.encode(adminSecretSeed);
   const messageData = encoder.encode(`admin:${dateString}`);
   
   const cryptoKey = await crypto.subtle.importKey(
@@ -208,7 +208,7 @@ export async function handleAdminSubmit(request, env) {
     }
     
     // Generate expected admin password for today
-    const expectedAdminPassword = await generateAdminPassword(env.SECRET_SEED);
+    const expectedAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
     
     if (adminPassword !== expectedAdminPassword) {
       return Response.redirect(new URL('/admin?error=1', request.url), 302);
@@ -287,7 +287,7 @@ export async function handleAdminPanel(request, env, token, timestamp) {
   }
   try {
     const currentPassword = await generateDailyPassword(env.SECRET_SEED);
-    const currentAdminPassword = await generateAdminPassword(env.SECRET_SEED);
+    const currentAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
     const today = new Date().toISOString().split('T')[0];
     
     const html = `<!DOCTYPE html>
@@ -502,7 +502,31 @@ export async function handleAdminPanel(request, env, token, timestamp) {
       </div>
       
       <div class="warning">
-        ⚠️ Password automatically resets at midnight UTC. Share this password securely.
+        ⚠️ Passwords automatically reset daily at midnight UTC (00:00). Share these passwords securely.
+      </div>
+      
+      <div class="admin-card">
+        <h2>Password Management</h2>
+        
+        <div class="info-item">
+          <label>How to Change Admin Password</label>
+          <value>Set ADMIN_SECRET_SEED environment variable via wrangler secrets</value>
+        </div>
+        
+        <div class="info-item">
+          <label>How to Change User Password</label>
+          <value>Set SECRET_SEED environment variable via wrangler secrets</value>
+        </div>
+        
+        <div class="info-item">
+          <label>Password Reset Schedule</label>
+          <value>Daily at 00:00 UTC (automatic)</value>
+        </div>
+        
+        <div class="info-item">
+          <label>Admin Session Duration</label>
+          <value>30 minutes (auto-logout)</value>
+        </div>
       </div>
       
       <div class="actions">
