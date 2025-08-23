@@ -20,12 +20,12 @@ export async function requireAuth(request, env) {
     return null;
   }
   
-  // For API requests, check if there's a valid referrer from one-time view
+  // For API requests and HTML pages, check if there's a valid referrer from one-time view
   const referrer = request.headers.get('Referer');
-  if (url.pathname.startsWith('/api/') && referrer) {
+  if (referrer) {
     const referrerUrl = new URL(referrer);
     if (referrerUrl.pathname.startsWith('/view/')) {
-      // Allow API calls from one-time view pages
+      // Allow requests from one-time view pages
       return null;
     }
   }
