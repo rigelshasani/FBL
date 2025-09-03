@@ -42,7 +42,7 @@ export function getUTCMidnight(date = new Date()) {
  * @returns {Promise<string>} Set-Cookie header value
  */
 export async function createAuthCookie(password, issuedAt = new Date()) {
-  const midnight = getTiranaMidnight(issuedAt);
+  const midnight = getUTCMidnight(issuedAt);
   const issuedDate = issuedAt.toISOString().split('T')[0];
   
   const cookieData = {

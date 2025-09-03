@@ -3,6 +3,23 @@
  */
 
 import { generateDailyPassword, createAuthCookie } from '../auth/gate.js';
+import { validatePassword } from '../utils/validation.js';
+import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+async function timingSafeEquals(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  
+  return await crypto.subtle.timingSafeEqual(aBytes, bBytes);
+}
 
 /**
  * Generate a one-time token that expires immediately after use
@@ -49,7 +66,10 @@ async function validateOneTimeToken(secret, token, timestamp) {
  * @returns {Response} Lock screen HTML
  */
 export async function handleLockScreen(request, env) {
-  const html = `<!DOCTYPE html>
+  // Generate CSRF token for the form
+  const csrfToken = await generateCSRFToken(env.SECRET_SEED);
+  
+  let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -216,11 +236,26 @@ export async function handleLockScreen(request, env) {
 </body>
 </html>`;
 
-  return new Response(html, {
+  // Inject CSRF token into forms
+  html = injectCSRFToken(html, csrfToken);
+  
+  const response = new Response(html, {
     headers: { 
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     }
+  });
+  
+  // Set CSRF token cookie
+  const headers = new Headers(response.headers);
+  headers.append('Set-Cookie', 
+    `csrf-token=${csrfToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=1800`
+  );
+  
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
   });
 }
 
@@ -234,16 +269,23 @@ export async function handleLockScreen(request, env) {
 export async function handleLockSubmit(request, env) {
   try {
     const formData = await request.formData();
-    const password = formData.get('password')?.trim();
+    const rawPassword = formData.get('password');
     
-    if (!password) {
+    // Validate and sanitize password input
+    const passwordValidation = validatePassword(rawPassword);
+    if (!passwordValidation.valid) {
+      console.warn('Invalid password input:', passwordValidation.error);
       return Response.redirect(new URL('/lock?error=1', request.url), 302);
     }
+    
+    const password = passwordValidation.value;
     
     // Generate expected password for today
     const expectedPassword = await generateDailyPassword(env.SECRET_SEED);
     
-    if (password !== expectedPassword) {
+    // Use timing-safe comparison to prevent timing attacks
+    const isValid = await timingSafeEquals(password, expectedPassword);
+    if (!isValid) {
       return Response.redirect(new URL('/lock?error=1', request.url), 302);
     }
     
@@ -281,13 +323,67 @@ export async function handleOneTimeView(request, env, token, timestamp) {
     });
   }
   
-  return await showMainContent(request, env);
+  return await showMainContent(request, env, token, timestamp);
 }
 
 /**
- * Show the main cemetery content (stateless)
+ * Generate session token for authenticated access
  */
-async function showMainContent(request, env) {
+async function generateSessionToken(secretSeed) {
+  const timestamp = Date.now();
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${timestamp}:session_token`);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secretSeed),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 16);
+  
+  return `${timestamp}:${signatureHex}`;
+}
+
+/**
+ * Show the main cemetery content with session token
+ */
+/**
+ * Generate API token for frontend requests
+ */
+async function generateAPIToken(secretSeed) {
+  const timestamp = Date.now();
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${timestamp}:api_token`);
+  
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(secretSeed),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', key, data);
+  const signatureHex = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+    .slice(0, 16);
+  
+  return `${timestamp}:${signatureHex}`;
+}
+
+async function showMainContent(request, env, oneTimeToken, oneTimeTimestamp) {
+  // Generate session token for this view
+  const sessionToken = await generateSessionToken(env.SECRET_SEED);
+  // Generate API token for JavaScript requests  
+  const apiToken = await generateAPIToken(env.SECRET_SEED);
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -524,8 +620,15 @@ async function showMainContent(request, env) {
       window.location.href = '/lock';
     }, 30000);
     
+    // API token for secure requests
+    const API_TOKEN = '${apiToken}';
+    
     // Load book count from API
-    fetch('/api/books?limit=1')
+    fetch('/api/books?limit=1', {
+      headers: {
+        'Authorization': 'Bearer ' + API_TOKEN
+      }
+    })
       .then(response => response.json())
       .then(data => {
         const count = data.pagination?.total || 0;
@@ -554,7 +657,8 @@ async function showMainContent(request, env) {
       'Pragma': 'no-cache',
       'Expires': '0',
       'X-Frame-Options': 'DENY',
-      'Vary': '*'
+      'Vary': '*',
+      'Set-Cookie': `cfb_session=${sessionToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=600`
     }
   });
 }

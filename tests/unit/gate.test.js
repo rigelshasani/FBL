@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { 
   generateDailyPassword, 
-  getTiranaMidnight, 
+  getUTCMidnight, 
   createAuthCookie, 
   validateAuthCookie 
 } from '../../src/auth/gate.js';
@@ -91,25 +91,28 @@ describe('generateDailyPassword', () => {
   });
 });
 
-describe('getTiranaMidnight', () => {
-  it('should return next midnight in Tirane timezone', () => {
+describe('getUTCMidnight', () => {
+  it('should return next midnight in UTC timezone', () => {
     const date = new Date('2024-01-15T14:30:00Z'); // 2:30 PM UTC
-    const midnight = getTiranaMidnight(date);
+    const midnight = getUTCMidnight(date);
     
     expect(midnight).toBeInstanceOf(Date);
     expect(midnight.getTime()).toBeGreaterThan(date.getTime());
   });
   
-  it('should handle DST transitions', () => {
-    // Test around DST transition dates for Europe/Tirane
-    const beforeDST = new Date('2024-03-30T22:00:00Z');
-    const afterDST = new Date('2024-03-31T22:00:00Z');
+  it('should return consistent UTC midnight', () => {
+    const date1 = new Date('2024-03-30T22:00:00Z');
+    const date2 = new Date('2024-03-31T22:00:00Z');
     
-    const midnightBefore = getTiranaMidnight(beforeDST);
-    const midnightAfter = getTiranaMidnight(afterDST);
+    const midnight1 = getUTCMidnight(date1);
+    const midnight2 = getUTCMidnight(date2);
     
-    expect(midnightBefore).toBeInstanceOf(Date);
-    expect(midnightAfter).toBeInstanceOf(Date);
+    expect(midnight1).toBeInstanceOf(Date);
+    expect(midnight2).toBeInstanceOf(Date);
+    
+    // UTC midnight should be consistent
+    expect(midnight1.getUTCHours()).toBe(0);
+    expect(midnight2.getUTCHours()).toBe(0);
   });
 });
 

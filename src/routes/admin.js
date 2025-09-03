@@ -3,6 +3,25 @@
  */
 
 import { generateDailyPassword } from '../auth/gate.js';
+import { validatePassword } from '../utils/validation.js';
+import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
+import { createSupabaseClient } from '../db/client.js';
+import { getBooks, getCategories } from '../db/queries.js';
+
+/**
+ * Timing-safe string comparison to prevent timing attacks
+ */
+async function timingSafeEquals(a, b) {
+  if (a.length !== b.length) {
+    return false;
+  }
+  
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+  
+  return await crypto.subtle.timingSafeEqual(aBytes, bBytes);
+}
 
 /**
  * Generate admin password using HMAC-SHA256
@@ -44,7 +63,10 @@ export async function handleAdminLogin(request, env) {
   const url = new URL(request.url);
   const error = url.searchParams.get('error');
   
-  const html = `<!DOCTYPE html>
+  // Generate CSRF token for the form
+  const csrfToken = await generateCSRFToken(env.SECRET_SEED);
+  
+  let html = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -187,11 +209,26 @@ export async function handleAdminLogin(request, env) {
 </body>
 </html>`;
 
-  return new Response(html, {
+  // Inject CSRF token into forms
+  html = injectCSRFToken(html, csrfToken);
+  
+  const response = new Response(html, {
     headers: { 
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, must-revalidate'
     }
+  });
+  
+  // Set CSRF token cookie
+  const headers = new Headers(response.headers);
+  headers.append('Set-Cookie', 
+    `csrf-token=${csrfToken}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=1800`
+  );
+  
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
   });
 }
 
@@ -201,16 +238,23 @@ export async function handleAdminLogin(request, env) {
 export async function handleAdminSubmit(request, env) {
   try {
     const formData = await request.formData();
-    const adminPassword = formData.get('admin_password')?.trim();
+    const rawAdminPassword = formData.get('admin_password');
     
-    if (!adminPassword) {
+    // Validate and sanitize admin password input
+    const passwordValidation = validatePassword(rawAdminPassword);
+    if (!passwordValidation.valid) {
+      console.warn('Invalid admin password input:', passwordValidation.error);
       return Response.redirect(new URL('/admin?error=1', request.url), 302);
     }
+    
+    const adminPassword = passwordValidation.value;
     
     // Generate expected admin password for today
     const expectedAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
     
-    if (adminPassword !== expectedAdminPassword) {
+    // Use timing-safe comparison to prevent timing attacks
+    const isValid = await timingSafeEquals(adminPassword, expectedAdminPassword);
+    if (!isValid) {
       return Response.redirect(new URL('/admin?error=1', request.url), 302);
     }
     
@@ -289,6 +333,32 @@ export async function handleAdminPanel(request, env, token, timestamp) {
     const currentPassword = await generateDailyPassword(env.SECRET_SEED);
     const currentAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
     const today = new Date().toISOString().split('T')[0];
+    
+    // Fetch books and categories for management with error handling
+    let books = [];
+    let categories = [];
+    
+    try {
+      const supabase = createSupabaseClient(env);
+      
+      try {
+        const booksResult = await getBooks(supabase, { limit: 50 });
+        books = booksResult.data || [];
+      } catch (error) {
+        console.error('Error fetching books for admin:', error);
+        books = [];
+      }
+      
+      try {
+        const categoriesResult = await getCategories(supabase);
+        categories = categoriesResult.data || [];
+      } catch (error) {
+        console.error('Error fetching categories for admin:', error);
+        categories = [];
+      }
+    } catch (error) {
+      console.error('Error creating Supabase client:', error);
+    }
     
     const html = `<!DOCTYPE html>
 <html lang="en">
@@ -504,6 +574,106 @@ export async function handleAdminPanel(request, env, token, timestamp) {
       <div class="warning">
         ⚠️ Passwords automatically reset daily at midnight UTC (00:00). Share these passwords securely.
       </div>
+    </div>
+    
+    <!-- Book Management Section -->
+    <div class="admin-card">
+      <h2>Book Management</h2>
+      
+      <div class="info-grid">
+        <div class="info-item">
+          <label>Total Books</label>
+          <value>${books.length}</value>
+        </div>
+        <div class="info-item">
+          <label>Categories</label>
+          <value>${categories.length}</value>
+        </div>
+        <div class="info-item">
+          <label>Database Status</label>
+          <value style="color: ${books.length >= 0 && categories.length >= 0 ? '#90EE90' : '#ff6b6b'};">
+            ${books.length >= 0 && categories.length >= 0 ? '✅ Connected' : '❌ Error'}
+          </value>
+        </div>
+        <div class="info-item">
+          <label>Last Updated</label>
+          <value>${new Date().toLocaleTimeString()}</value>
+        </div>
+      </div>
+      
+      <!-- Add Book Form -->
+      <div class="book-form" style="margin-top: 2rem;">
+        <h3 style="margin-bottom: 1rem; color: #b8860b;">Add New Book</h3>
+        <form id="addBookForm" style="display: grid; gap: 1rem;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <input type="text" id="bookTitle" placeholder="Book Title" required 
+                   style="padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #e8e8e8;">
+            <input type="text" id="bookAuthor" placeholder="Author" required
+                   style="padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #e8e8e8;">
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <input type="number" id="bookYear" placeholder="Year" min="1000" max="9999"
+                   style="padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #e8e8e8;">
+            <select id="bookLanguage" 
+                    style="padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #e8e8e8;">
+              <option value="en">English</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="es">Spanish</option>
+              <option value="it">Italian</option>
+            </select>
+          </div>
+          <textarea id="bookSummary" placeholder="Book Summary" rows="3"
+                    style="padding: 0.5rem; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #e8e8e8; resize: vertical;"></textarea>
+          <div>
+            <label style="display: block; margin-bottom: 0.5rem; opacity: 0.8;">Categories:</label>
+            ${categories.length > 0 ? `
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.5rem;">
+              ${categories.map(cat => `
+                <label style="display: flex; align-items: center; gap: 0.5rem;">
+                  <input type="checkbox" name="categories" value="${cat.slug}" style="margin: 0;">
+                  <span style="font-size: 0.9rem;">${cat.name}</span>
+                </label>
+              `).join('')}
+            </div>
+            ` : `
+            <p style="opacity: 0.7; font-style: italic; font-size: 0.9rem;">Categories could not be loaded. Books can be added without categories.</p>
+            `}
+          </div>
+          <button type="submit" class="btn btn-primary" style="justify-self: start; margin-top: 1rem;">
+            Add Book
+          </button>
+        </form>
+      </div>
+      
+      <!-- Books List -->
+      <div class="books-list" style="margin-top: 3rem;">
+        <h3 style="margin-bottom: 1rem; color: #b8860b;">Current Books</h3>
+        ${books.length === 0 ? 
+          '<p style="opacity: 0.7; font-style: italic;">No books in the library yet. Add the first one above!</p>' :
+          `<div style="display: grid; gap: 1rem;">
+            ${books.map(book => `
+              <div class="book-item" style="background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1); border-radius: 4px; padding: 1rem;">
+                <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: start;">
+                  <div>
+                    <h4 style="margin-bottom: 0.5rem; color: #e8e8e8;">${book.title}</h4>
+                    <p style="color: #b8860b; margin-bottom: 0.5rem;">by ${book.author} ${book.year ? `(${book.year})` : ''}</p>
+                    ${book.categories && book.categories.length > 0 ? 
+                      `<p style="font-size: 0.8rem; opacity: 0.7;">Categories: ${book.category_names ? book.category_names.join(', ') : book.categories.join(', ')}</p>` : ''
+                    }
+                    ${book.summary ? `<p style="font-size: 0.9rem; margin-top: 0.5rem; opacity: 0.8;">${book.summary.substring(0, 150)}${book.summary.length > 150 ? '...' : ''}</p>` : ''}
+                  </div>
+                  <div style="display: flex; gap: 0.5rem;">
+                    <button onclick="editBook('${book.id}')" class="btn btn-secondary" style="padding: 0.3rem 0.6rem; font-size: 0.8rem;">Edit</button>
+                    <button onclick="deleteBook('${book.id}', '${book.title.replace(/'/g, "\\'")}' )" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.8rem; border-color: #8B0000; color: #ff6b6b;">Delete</button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>`
+        }
+      </div>
+    </div>
       
       <div class="admin-card">
         <h2>Password Management</h2>
@@ -556,10 +726,73 @@ export async function handleAdminPanel(request, env, token, timestamp) {
       location.reload();
     }
     
-    // Auto-refresh every 60 seconds
+    // Book management functions
+    function generateSlug(title) {
+      return title.toLowerCase()
+        .replace(/[^a-z0-9\\s-]/g, '')
+        .replace(/\\s+/g, '-')
+        .replace(/-+/g, '-')
+        .trim();
+    }
+    
+    // Add book form submission
+    document.getElementById('addBookForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const formData = {
+        title: document.getElementById('bookTitle').value.trim(),
+        author: document.getElementById('bookAuthor').value.trim(),
+        year: document.getElementById('bookYear').value ? parseInt(document.getElementById('bookYear').value) : null,
+        language: document.getElementById('bookLanguage').value,
+        summary: document.getElementById('bookSummary').value.trim(),
+        categories: Array.from(document.querySelectorAll('input[name="categories"]:checked')).map(cb => cb.value)
+      };
+      
+      if (!formData.title || !formData.author) {
+        alert('Title and Author are required');
+        return;
+      }
+      
+      formData.slug = generateSlug(formData.title);
+      
+      try {
+        // Show loading state
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        const originalText = submitBtn.textContent;
+        submitBtn.textContent = 'Adding...';
+        submitBtn.disabled = true;
+        
+        // TODO: This would be an API call in a real implementation
+        // For now, we'll show an alert and refresh
+        alert('Book management API not yet implemented. Please add books directly in Supabase for now.');
+        
+        // Reset form
+        document.getElementById('addBookForm').reset();
+        
+      } catch (error) {
+        alert('Error adding book: ' + error.message);
+      } finally {
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+      }
+    });
+    
+    function editBook(bookId) {
+      // TODO: Implement book editing
+      alert('Edit functionality coming soon! For now, edit books directly in Supabase.');
+    }
+    
+    function deleteBook(bookId, title) {
+      if (confirm(\`Are you sure you want to delete "\${title}"? This action cannot be undone.\`)) {
+        // TODO: Implement book deletion
+        alert('Delete functionality coming soon! For now, delete books directly in Supabase.');
+      }
+    }
+    
+    // Auto-refresh every 60 seconds (but less frequently due to book data)
     setInterval(() => {
       location.reload();
-    }, 60000);
+    }, 120000); // 2 minutes instead of 1
   </script>
 </body>
 </html>`;

@@ -18,7 +18,9 @@
     "typecheck": "tsc --noEmit",
     "db:migrate": "node scripts/migrate.js",
     "db:seed": "node scripts/seed.js",
-    "db:reset": "npm run db:migrate && npm run db:seed"
+    "db:reset": "npm run db:migrate && npm run db:seed",
+    "db:test": "node scripts/test-db.js",
+    "db:setup": "node scripts/setup-db.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
