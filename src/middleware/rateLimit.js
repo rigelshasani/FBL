@@ -1,11 +1,8 @@
 /**
- * Rate limiting middleware using Cloudflare Durable Objects pattern
- * For now using in-memory storage per worker instance
+ * Rate limiting middleware with persistent storage
  */
 
-// In-memory storage for rate limit counters
-// NOTE: In production, this should use Durable Objects or external storage
-const rateLimitStore = new Map();
+import { createRateLimitStorage } from './rateLimitStorage.js';
 
 /**
  * Get client IP address from request headers
@@ -39,10 +36,13 @@ async function hashIP(ip) {
   return Array.from(hashArray, b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
 }
 
+// Cache storage instance per environment
+let storageInstance = null;
+
 /**
- * Rate limiting middleware
+ * Rate limiting middleware with persistent storage
  */
-export async function rateLimitMiddleware(request, options = {}) {
+export async function rateLimitMiddleware(request, env, options = {}) {
   const {
     windowMs = 60000,      // 1 minute default window
     maxRequests = 100,     // 100 requests per window default
@@ -52,6 +52,11 @@ export async function rateLimitMiddleware(request, options = {}) {
   } = options;
   
   try {
+    // Initialize storage if not already done
+    if (!storageInstance) {
+      storageInstance = createRateLimitStorage(env);
+    }
+    
     const clientIP = getClientIP(request);
     const key = keyGenerator ? 
       await keyGenerator(request) : 
@@ -60,14 +65,13 @@ export async function rateLimitMiddleware(request, options = {}) {
     const now = Date.now();
     const windowStart = now - windowMs;
     
-    // Get or create rate limit data for this key
-    let limitData = rateLimitStore.get(key);
+    // Get existing rate limit data
+    let limitData = await storageInstance.get(key);
     if (!limitData) {
       limitData = {
         requests: [],
         firstRequest: now
       };
-      rateLimitStore.set(key, limitData);
     }
     
     // Clean up old requests outside the current window
@@ -89,6 +93,9 @@ export async function rateLimitMiddleware(request, options = {}) {
     
     // Add current request timestamp
     limitData.requests.push(now);
+    
+    // Save updated data with TTL
+    await storageInstance.set(key, limitData, windowMs * 2); // Keep data longer than window
     
     return {
       allowed: true,
@@ -113,14 +120,14 @@ export async function rateLimitMiddleware(request, options = {}) {
  * Clean up old entries from rate limit store
  * Should be called periodically
  */
-export function cleanupRateLimitStore() {
-  const now = Date.now();
-  const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-  
-  for (const [key, data] of rateLimitStore.entries()) {
-    if (now - data.firstRequest > maxAge) {
-      rateLimitStore.delete(key);
+export async function cleanupRateLimitStore(env) {
+  try {
+    if (!storageInstance) {
+      storageInstance = createRateLimitStorage(env);
     }
+    await storageInstance.cleanup();
+  } catch (error) {
+    console.error('Rate limit cleanup error:', error);
   }
 }
 

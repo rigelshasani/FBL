@@ -31,7 +31,7 @@ export default {
     try {
       // Cleanup rate limit store periodically (every ~1000 requests)
       if (Math.random() < 0.001) {
-        cleanupRateLimitStore();
+        cleanupRateLimitStore(env);
       }
       
       // Health check (no rate limiting or auth required)
@@ -53,7 +53,7 @@ export default {
       if (url.pathname === '/lock') {
         if (method === 'GET') {
           // Apply page rate limiting
-          const rateLimitResult = await rateLimitMiddleware(request, rateLimitConfigs.pages);
+          const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.pages);
           if (!rateLimitResult.allowed) {
             return createRateLimitResponse(rateLimitResult);
           }
@@ -70,7 +70,7 @@ export default {
           }
           
           // Apply stricter auth rate limiting for login attempts
-          const rateLimitResult = await rateLimitMiddleware(request, rateLimitConfigs.auth);
+          const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.auth);
           if (!rateLimitResult.allowed) {
             return createRateLimitResponse(rateLimitResult);
           }
@@ -104,7 +104,7 @@ export default {
           rateLimitConfig = rateLimitConfigs.search; // Stricter for search
         }
         
-        const rateLimitResult = await rateLimitMiddleware(request, rateLimitConfig);
+        const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfig);
         if (!rateLimitResult.allowed) {
           return createRateLimitResponse(rateLimitResult);
         }
@@ -151,7 +151,7 @@ export default {
       if (url.pathname === '/admin') {
         if (method === 'GET') {
           // Apply page rate limiting
-          const rateLimitResult = await rateLimitMiddleware(request, rateLimitConfigs.pages);
+          const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.pages);
           if (!rateLimitResult.allowed) {
             return createRateLimitResponse(rateLimitResult);
           }
@@ -168,7 +168,7 @@ export default {
           }
           
           // Apply stricter auth rate limiting for admin login attempts
-          const rateLimitResult = await rateLimitMiddleware(request, rateLimitConfigs.auth);
+          const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.auth);
           if (!rateLimitResult.allowed) {
             return createRateLimitResponse(rateLimitResult);
           }
