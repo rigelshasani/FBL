@@ -3,6 +3,15 @@
  */
 
 import { executeQuery } from './client.js';
+import { 
+  isDatabaseAvailable, 
+  getFallbackBooks, 
+  getFallbackCategories, 
+  getFallbackBookBySlug,
+  getFallbackSearchResults,
+  getFallbackBooksByCategory,
+  createOfflineResponse
+} from './fallback.js';
 
 /**
  * Get paginated list of books with optional filters
@@ -19,6 +28,13 @@ export async function getBooks(supabase, options = {}) {
     search = null,
     sort = 'created_at'
   } = options;
+  
+  // Check database availability first
+  const dbAvailable = await isDatabaseAvailable(supabase);
+  if (!dbAvailable) {
+    const fallbackData = getFallbackBooks({ page, limit, category, search });
+    return createOfflineResponse('book browsing', fallbackData);
+  }
   
   const offset = (page - 1) * limit;
   
@@ -74,6 +90,16 @@ export async function getBooks(supabase, options = {}) {
  * @returns {Promise<object>} Book data
  */
 export async function getBookBySlug(supabase, slug) {
+  // Check database availability first
+  const dbAvailable = await isDatabaseAvailable(supabase);
+  if (!dbAvailable) {
+    const fallbackData = getFallbackBookBySlug(slug);
+    if (fallbackData.data) {
+      return createOfflineResponse('book details', fallbackData);
+    }
+    return fallbackData; // Return error if book not found
+  }
+  
   return executeQuery(supabase, async (db) => {
     return db
       .from('books_with_categories')
@@ -126,6 +152,13 @@ export async function getBookWithStats(supabase, slug) {
 export async function searchBooks(supabase, query, options = {}) {
   const { limit = 20, category = null } = options;
   
+  // Check database availability first
+  const dbAvailable = await isDatabaseAvailable(supabase);
+  if (!dbAvailable) {
+    const fallbackData = getFallbackSearchResults(query, { limit, category });
+    return createOfflineResponse('search', fallbackData);
+  }
+  
   return executeQuery(supabase, async (db) => {
     let search = db
       .from('books_with_categories')
@@ -146,6 +179,13 @@ export async function searchBooks(supabase, query, options = {}) {
  * @returns {Promise<object>} Categories list
  */
 export async function getCategories(supabase) {
+  // Check database availability first
+  const dbAvailable = await isDatabaseAvailable(supabase);
+  if (!dbAvailable) {
+    const fallbackData = getFallbackCategories();
+    return createOfflineResponse('categories', fallbackData);
+  }
+  
   return executeQuery(supabase, async (db) => {
     return db
       .from('categories')
@@ -163,6 +203,13 @@ export async function getCategories(supabase) {
  */
 export async function getBooksByCategory(supabase, categorySlug, options = {}) {
   const { limit = 20, offset = 0 } = options;
+  
+  // Check database availability first
+  const dbAvailable = await isDatabaseAvailable(supabase);
+  if (!dbAvailable) {
+    const fallbackData = getFallbackBooksByCategory(categorySlug, { limit, offset });
+    return createOfflineResponse(`${categorySlug} category browsing`, fallbackData);
+  }
   
   return executeQuery(supabase, async (db) => {
     return db

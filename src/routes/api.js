@@ -100,7 +100,10 @@ export async function handleBooksAPI(request, env) {
           limit: limit,
           total: 0,
           pages: 0
-        }
+        },
+        offline: result.offline || false,
+        message: result.message || null,
+        limitations: result.limitations || null
       }), {
       headers: { 
         'Content-Type': 'application/json',
@@ -169,10 +172,15 @@ export async function handleBookDetailAPI(request, env, slug) {
     }
     delete book.cover_key;
 
-    return new Response(JSON.stringify({ book }), {
+    return new Response(JSON.stringify({ 
+      book,
+      offline: result.offline || false,
+      message: result.message || null,
+      limitations: result.limitations || null
+    }), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'private, max-age=600'
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=600'
       }
     });
 
@@ -197,11 +205,14 @@ export async function handleCategoriesAPI(request, env) {
     const result = await getCategories(supabase);
 
     return new Response(JSON.stringify({
-      categories: result.data || []
+      categories: result.data || [],
+      offline: result.offline || false,
+      message: result.message || null,
+      limitations: result.limitations || null
     }), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'private, max-age=1800' // 30 minutes
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=1800' // 30 minutes
       }
     });
 
@@ -299,11 +310,14 @@ export async function handleSearchAPI(request, env) {
     return new Response(JSON.stringify({
       books: result.data || [],
       query: query.trim(),
-      count: result.data?.length || 0
+      count: result.data?.length || 0,
+      offline: result.offline || false,
+      message: result.message || null,
+      limitations: result.limitations || null
     }), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'private, max-age=300'
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=300'
       }
     });
 
@@ -337,11 +351,14 @@ export async function handleCategoryBooksAPI(request, env, categorySlug) {
     return new Response(JSON.stringify({
       books: result.data || [],
       category: categorySlug,
-      count: result.data?.length || 0
+      count: result.data?.length || 0,
+      offline: result.offline || false,
+      message: result.message || null,
+      limitations: result.limitations || null
     }), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'private, max-age=600'
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=600'
       }
     });
 
