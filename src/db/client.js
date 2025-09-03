@@ -3,6 +3,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { logDatabaseOperation, PerformanceTracker, logger } from '../monitoring/logger.js';
 
 /**
  * Create Supabase client with service role key
@@ -36,23 +37,37 @@ export function createSupabaseClient(env) {
 }
 
 /**
- * Execute database query with error handling
+ * Execute database query with error handling and monitoring
  * @param {object} supabase - Supabase client
  * @param {Function} queryFn - Query function to execute
+ * @param {string} operation - Operation name for logging
+ * @param {string} table - Table name for logging
  * @returns {Promise<object>} Query result
  */
-export async function executeQuery(supabase, queryFn) {
+export async function executeQuery(supabase, queryFn, operation = 'query', table = 'unknown') {
+  const tracker = new PerformanceTracker(`db_${operation}`, logger.child({ table }));
+  
   try {
     const result = await queryFn(supabase);
     
     if (result.error) {
-      console.error('Database query error:', result.error);
+      tracker.error(new Error(result.error.message), { table, operation });
+      logDatabaseOperation(operation, table, Date.now() - tracker.startTime, false, result.error);
       throw new Error(`Database error: ${result.error.message}`);
     }
     
+    const duration = tracker.finish(true, { 
+      table, 
+      operation, 
+      rowCount: Array.isArray(result.data) ? result.data.length : result.data ? 1 : 0 
+    });
+    
+    logDatabaseOperation(operation, table, duration, true);
     return result;
+    
   } catch (error) {
-    console.error('Database execution error:', error);
+    tracker.error(error, { table, operation });
+    logDatabaseOperation(operation, table, Date.now() - tracker.startTime, false, error);
     throw error;
   }
 }

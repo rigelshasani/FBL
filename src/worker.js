@@ -7,6 +7,7 @@ import { requireAuth } from './middleware/auth.js';
 import { rateLimitMiddleware, rateLimitConfigs, createRateLimitResponse, cleanupRateLimitStore } from './middleware/rateLimit.js';
 import { csrfMiddleware, generateCSRFToken, setCSRFToken, injectCSRFToken } from './middleware/csrf.js';
 import { securityResponse } from './middleware/securityHeaders.js';
+import { createRequestLogger, PerformanceTracker, logSecurityEvent, getMetricsSnapshot } from './monitoring/logger.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
@@ -25,8 +26,22 @@ function secureResponse(response) {
 
 export default {
   async fetch(request, env, ctx) {
+    // Initialize request tracking
+    const requestLogger = createRequestLogger(request);
+    const requestTracker = new PerformanceTracker('request_handling', requestLogger);
+    
     const url = new URL(request.url);
     const method = request.method;
+    
+    // Set start time for uptime tracking
+    if (!globalThis.startTime) {
+      globalThis.startTime = Date.now();
+    }
+    
+    requestLogger.info('Request received', {
+      url: url.pathname + url.search,
+      method: request.method
+    });
     
     try {
       // Cleanup rate limit store periodically (every ~1000 requests)
@@ -36,16 +51,37 @@ export default {
       
       // Health check (no rate limiting or auth required)
       if (url.pathname === '/health') {
+        const metrics = getMetricsSnapshot();
         const response = new Response(JSON.stringify({ 
           status: 'ok', 
           timestamp: new Date().toISOString(),
-          environment: env.ENVIRONMENT || 'development'
+          environment: env.ENVIRONMENT || 'development',
+          metrics: {
+            uptime: metrics.uptime,
+            requests: metrics.counts,
+            performance: metrics.performance,
+            errorCount: metrics.recentErrors.length
+          }
         }), {
           headers: { 
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate'
           }
         });
+        requestTracker.finish(true, { endpoint: 'health' });
+        return securityResponse(response);
+      }
+      
+      // Metrics endpoint (admin only)
+      if (url.pathname === '/admin/metrics') {
+        const metrics = getMetricsSnapshot();
+        const response = new Response(JSON.stringify(metrics), {
+          headers: { 
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        requestTracker.finish(true, { endpoint: 'metrics' });
         return securityResponse(response);
       }
       
@@ -55,10 +91,16 @@ export default {
           // Apply page rate limiting
           const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.pages);
           if (!rateLimitResult.allowed) {
+            logSecurityEvent('rate_limit_exceeded', { 
+              endpoint: 'lock_screen_get',
+              ip: request.headers.get('CF-Connecting-IP')
+            });
+            requestTracker.finish(false, { endpoint: 'lock', reason: 'rate_limited' });
             return createRateLimitResponse(rateLimitResult);
           }
           
           const response = await handleLockScreen(request, env);
+          requestTracker.finish(true, { endpoint: 'lock' });
           return createRateLimitResponse(rateLimitResult, response) || response;
         } else if (method === 'POST') {
           // Apply CSRF protection for POST requests
@@ -66,16 +108,34 @@ export default {
             skipPaths: [] // Don't skip lock POST for CSRF
           });
           if (!csrfResult.valid) {
+            logSecurityEvent('csrf_validation_failed', { 
+              endpoint: 'lock_submit',
+              ip: request.headers.get('CF-Connecting-IP')
+            });
+            requestTracker.finish(false, { endpoint: 'lock', reason: 'csrf_failed' });
             return csrfResult.response;
           }
           
           // Apply stricter auth rate limiting for login attempts
           const rateLimitResult = await rateLimitMiddleware(request, env, rateLimitConfigs.auth);
           if (!rateLimitResult.allowed) {
+            logSecurityEvent('auth_rate_limit_exceeded', { 
+              endpoint: 'lock_submit',
+              ip: request.headers.get('CF-Connecting-IP')
+            });
+            requestTracker.finish(false, { endpoint: 'lock', reason: 'auth_rate_limited' });
             return createRateLimitResponse(rateLimitResult);
           }
           
           const response = await handleLockSubmit(request, env);
+          const success = response.status < 400;
+          if (!success) {
+            logSecurityEvent('authentication_failed', {
+              endpoint: 'lock_submit',
+              ip: request.headers.get('CF-Connecting-IP')
+            });
+          }
+          requestTracker.finish(success, { endpoint: 'lock', type: 'auth' });
           return createRateLimitResponse(rateLimitResult, response) || response;
         }
       }
@@ -211,7 +271,18 @@ export default {
       return securityResponse(notFoundResponse);
       
     } catch (error) {
-      console.error('Worker error:', error);
+      requestLogger.error('Unhandled request error', {
+        error: error.message,
+        stack: error.stack,
+        url: url.pathname,
+        method: request.method
+      });
+      
+      requestTracker.error(error, { 
+        endpoint: url.pathname,
+        method: request.method
+      });
+      
       const errorResponse = new Response('Internal Server Error', { 
         status: 500,
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
