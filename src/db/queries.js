@@ -51,13 +51,17 @@ export async function getBooks(supabase, options = {}) {
     
     const result = await query;
     
+    // Handle null count gracefully
+    const totalCount = result.count ?? 0;
+    
     return {
       ...result,
+      data: result.data || [],
       pagination: {
         page,
         limit,
-        total: result.count,
-        pages: Math.ceil(result.count / limit)
+        total: totalCount,
+        pages: Math.ceil(totalCount / limit)
       }
     };
   });
