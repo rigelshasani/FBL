@@ -3,6 +3,7 @@
  */
 
 import { validateAuthCookie } from '../auth/gate.js';
+import { isSessionBlacklisted, isSessionGloballyInvalid, extractSessionTimestamp } from '../auth/sessionManager.js';
 
 /**
  * Validate session token from Authorization header or cookie
@@ -29,6 +30,11 @@ async function validateSessionToken(request, env) {
  */
 async function validateBearerToken(token, env) {
   try {
+    // Check if token is blacklisted
+    if (await isSessionBlacklisted(token, env)) {
+      return { valid: false, reason: 'blacklisted' };
+    }
+    
     // Token format: {timestamp}:{signature}
     const parts = token.split(':');
     if (parts.length !== 2) {
@@ -42,6 +48,12 @@ async function validateBearerToken(token, env) {
     // Token expires after 5 minutes
     if (tokenAge > 5 * 60 * 1000) {
       return { valid: false };
+    }
+    
+    // Check global session invalidation
+    const sessionTimestamp = extractSessionTimestamp(token);
+    if (sessionTimestamp && await isSessionGloballyInvalid(sessionTimestamp, env)) {
+      return { valid: false, reason: 'globally_invalid' };
     }
     
     // Verify signature
@@ -97,6 +109,11 @@ async function validateSessionCookie(cookieHeader, env) {
       return { valid: false };
     }
     
+    // Check if token is blacklisted
+    if (await isSessionBlacklisted(sessionToken, env)) {
+      return { valid: false, reason: 'blacklisted' };
+    }
+    
     // Validate session token (similar to bearer token but with session prefix)
     const parts = sessionToken.split(':');
     if (parts.length !== 2) {
@@ -110,6 +127,12 @@ async function validateSessionCookie(cookieHeader, env) {
     // Session expires after 10 minutes for page access
     if (tokenAge > 10 * 60 * 1000) {
       return { valid: false };
+    }
+    
+    // Check global session invalidation
+    const sessionTimestamp = extractSessionTimestamp(sessionToken);
+    if (sessionTimestamp && await isSessionGloballyInvalid(sessionTimestamp, env)) {
+      return { valid: false, reason: 'globally_invalid' };
     }
     
     // Verify signature

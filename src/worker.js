@@ -9,7 +9,7 @@ import { csrfMiddleware, generateCSRFToken, setCSRFToken, injectCSRFToken } from
 import { securityResponse } from './middleware/securityHeaders.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
-import { handleAdminLogin, handleAdminSubmit, handleAdminPanel } from './routes/admin.js';
+import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -176,6 +176,13 @@ export default {
           const response = await handleAdminSubmit(request, env);
           return createRateLimitResponse(rateLimitResult, response) || response;
         }
+      }
+      
+      // Admin API routes
+      const adminAPIMatch = url.pathname.match(/^\/admin\/api\/(.+)$/);
+      if (adminAPIMatch) {
+        const endpoint = adminAPIMatch[1];
+        return await handleAdminAPI(request, env, endpoint);
       }
       
       // Admin panel route (authenticated)

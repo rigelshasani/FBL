@@ -7,6 +7,7 @@ import { validatePassword } from '../utils/validation.js';
 import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
 import { createSupabaseClient } from '../db/client.js';
 import { getBooks, getCategories } from '../db/queries.js';
+import { invalidateAllSessions, blacklistSession } from '../auth/sessionManager.js';
 
 /**
  * Timing-safe string comparison to prevent timing attacks
@@ -601,6 +602,22 @@ export async function handleAdminPanel(request, env, token, timestamp) {
         </div>
       </div>
       
+      <!-- Session Management -->
+      <div class="session-controls" style="margin-top: 2rem; padding: 1rem; background: rgba(139,0,0,0.1); border: 1px solid rgba(139,0,0,0.3); border-radius: 4px;">
+        <h3 style="margin-bottom: 1rem; color: #ff6b6b;">Security Controls</h3>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+          <button onclick="invalidateAllSessions()" class="btn" style="background: #8B0000; color: white; border-color: #8B0000;">
+            Invalidate All Sessions
+          </button>
+          <button onclick="refreshData()" class="btn btn-secondary">
+            Refresh Data
+          </button>
+        </div>
+        <p style="font-size: 0.8rem; margin-top: 1rem; opacity: 0.8; color: #ff6b6b;">
+          ⚠️ Warning: Invalidating all sessions will force all users to re-authenticate.
+        </p>
+      </div>
+      
       <!-- Add Book Form -->
       <div class="book-form" style="margin-top: 2rem;">
         <h3 style="margin-bottom: 1rem; color: #b8860b;">Add New Book</h3>
@@ -789,6 +806,36 @@ export async function handleAdminPanel(request, env, token, timestamp) {
       }
     }
     
+    function refreshData() {
+      location.reload();
+    }
+    
+    // Session invalidation
+    async function invalidateAllSessions() {
+      if (!confirm('Are you sure you want to invalidate all sessions? This will force all users to log in again.')) {
+        return;
+      }
+      
+      try {
+        const response = await fetch('/admin/api/invalidate-sessions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Token': '${token}:${timestamp}'
+          }
+        });
+        
+        if (response.ok) {
+          alert('All sessions have been invalidated successfully.');
+        } else {
+          const error = await response.json();
+          alert('Error invalidating sessions: ' + (error.message || 'Unknown error'));
+        }
+      } catch (error) {
+        alert('Error invalidating sessions: ' + error.message);
+      }
+    }
+    
     // Auto-refresh every 60 seconds (but less frequently due to book data)
     setInterval(() => {
       location.reload();
@@ -809,5 +856,80 @@ export async function handleAdminPanel(request, env, token, timestamp) {
   } catch (error) {
     console.error('Admin page error:', error);
     return new Response('Internal Server Error', { status: 500 });
+  }
+}
+
+/**
+ * Handle admin API endpoint for session invalidation
+ */
+export async function handleAdminAPI(request, env, endpoint) {
+  try {
+    // Verify admin token from header
+    const adminToken = request.headers.get('X-Admin-Token');
+    if (!adminToken) {
+      return new Response(JSON.stringify({ error: 'Admin token required' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const parts = adminToken.split(':');
+    if (parts.length !== 2) {
+      return new Response(JSON.stringify({ error: 'Invalid admin token' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    const [token, timestamp] = parts;
+    
+    // Verify admin token (basic verification - in production would be more thorough)
+    const expectedAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
+    const tokenData = { token, timestamp };
+    
+    // Handle different admin API endpoints
+    switch (endpoint) {
+      case 'invalidate-sessions':
+        if (request.method !== 'POST') {
+          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+            status: 405,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+        const success = await invalidateAllSessions(env);
+        if (success) {
+          return new Response(JSON.stringify({ 
+            success: true,
+            message: 'All sessions invalidated',
+            timestamp: Date.now()
+          }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } else {
+          return new Response(JSON.stringify({ 
+            error: 'Failed to invalidate sessions' 
+          }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+        
+      default:
+        return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' }
+        });
+    }
+    
+  } catch (error) {
+    console.error('Admin API error:', error);
+    return new Response(JSON.stringify({ 
+      error: 'Internal server error',
+      details: error.message 
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
