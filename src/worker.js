@@ -8,6 +8,7 @@ import { rateLimitMiddleware, rateLimitConfigs, createRateLimitResponse, cleanup
 import { csrfMiddleware, generateCSRFToken, setCSRFToken, injectCSRFToken } from './middleware/csrf.js';
 import { securityResponse } from './middleware/securityHeaders.js';
 import { createRequestLogger, PerformanceTracker, logSecurityEvent, getMetricsSnapshot } from './monitoring/logger.js';
+import { memoryManager, initializeMemoryManagement, CleanupScheduler } from './utils/memoryManager.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
@@ -33,9 +34,16 @@ export default {
     const url = new URL(request.url);
     const method = request.method;
     
-    // Set start time for uptime tracking
+    // Set start time for uptime tracking and initialize memory management
     if (!globalThis.startTime) {
       globalThis.startTime = Date.now();
+      initializeMemoryManagement();
+      
+      // Start cleanup scheduler
+      if (!globalThis.cleanupScheduler) {
+        globalThis.cleanupScheduler = new CleanupScheduler(memoryManager);
+        globalThis.cleanupScheduler.start();
+      }
     }
     
     requestLogger.info('Request received', {
@@ -44,9 +52,12 @@ export default {
     });
     
     try {
-      // Cleanup rate limit store periodically (every ~1000 requests)
+      // Cleanup rate limit store and memory periodically (every ~1000 requests)
       if (Math.random() < 0.001) {
-        cleanupRateLimitStore(env);
+        await Promise.all([
+          cleanupRateLimitStore(env),
+          memoryManager.cleanup()
+        ]);
       }
       
       // Health check (no rate limiting or auth required)
@@ -75,7 +86,12 @@ export default {
       // Metrics endpoint (admin only)
       if (url.pathname === '/admin/metrics') {
         const metrics = getMetricsSnapshot();
-        const response = new Response(JSON.stringify(metrics), {
+        const memoryStats = memoryManager.getMemoryStats();
+        
+        const response = new Response(JSON.stringify({
+          ...metrics,
+          memory: memoryStats
+        }), {
           headers: { 
             'Content-Type': 'application/json',
             'Cache-Control': 'no-cache, no-store, must-revalidate'

@@ -110,6 +110,11 @@ export class InMemoryStorage extends RateLimitStorage {
   constructor() {
     super();
     this.store = memoryStore;
+    
+    // Register with global rate limit store for memory management
+    if (!globalThis.rateLimitStore) {
+      globalThis.rateLimitStore = this.store;
+    }
   }
   
   async get(key) {
