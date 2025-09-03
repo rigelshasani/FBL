@@ -2,7 +2,7 @@
  * Lock screen and authentication routes
  */
 
-import { generateDailyPassword, createAuthCookie } from '../auth/gate.js';
+import { generateDailyPassword } from '../auth/gate.js';
 import { validatePassword } from '../utils/validation.js';
 import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
 
@@ -379,7 +379,7 @@ async function generateAPIToken(secretSeed) {
   return `${timestamp}:${signatureHex}`;
 }
 
-async function showMainContent(request, env, oneTimeToken, oneTimeTimestamp) {
+async function showMainContent(request, env) {
   // Generate session token for this view
   const sessionToken = await generateSessionToken(env.SECRET_SEED);
   // Generate API token for JavaScript requests  

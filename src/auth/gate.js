@@ -96,7 +96,7 @@ export async function validateAuthCookie(cookieHeader, secretSeed) {
     
     return issued === todayDate;
     
-  } catch (error) {
+  } catch {
     return false;
   }
 }

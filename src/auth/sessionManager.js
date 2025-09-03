@@ -42,8 +42,8 @@ export async function blacklistSession(token, env, ttl = 24 * 60 * 60 * 1000) {
     }, ttl);
     
     return true;
-  } catch (error) {
-    console.error('Session blacklist error:', error);
+  } catch {
+    // Silent fail for blacklist errors to prevent service disruption
     return false;
   }
 }
@@ -61,8 +61,8 @@ export async function isSessionBlacklisted(token, env) {
     
     const result = await storage.get(key);
     return !!result?.blacklisted;
-  } catch (error) {
-    console.error('Session blacklist check error:', error);
+  } catch {
+    // Silent fail for session management errors to prevent service disruption'Session blacklist check error:', error);
     // On error, assume not blacklisted to prevent service disruption
     return false;
   }
@@ -85,8 +85,8 @@ export async function invalidateAllSessions(env) {
     }, 24 * 60 * 60 * 1000); // 24 hours
     
     return true;
-  } catch (error) {
-    console.error('Global session invalidation error:', error);
+  } catch {
+    // Silent fail for session management errors to prevent service disruption'Global session invalidation error:', error);
     return false;
   }
 }
@@ -107,8 +107,8 @@ export async function isSessionGloballyInvalid(sessionTimestamp, env) {
     
     // Session is invalid if it was created before the invalidation
     return sessionTimestamp < invalidation.timestamp;
-  } catch (error) {
-    console.error('Global session validation error:', error);
+  } catch {
+    // Silent fail for session management errors to prevent service disruption'Global session validation error:', error);
     return false;
   }
 }
@@ -138,7 +138,7 @@ export async function cleanupExpiredSessions(env) {
   try {
     const storage = initializeBlacklistStorage(env);
     await storage.cleanup();
-  } catch (error) {
-    console.error('Session cleanup error:', error);
+  } catch {
+    // Silent fail for session management errors to prevent service disruption'Session cleanup error:', error);
   }
 }

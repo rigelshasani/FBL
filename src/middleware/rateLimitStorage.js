@@ -15,7 +15,7 @@ export class RateLimitStorage {
    * @param {string} key - Rate limit key
    * @returns {Promise<object|null>} Rate limit data
    */
-  async get(key) {
+  async get() {
     throw new Error('get() must be implemented');
   }
   
@@ -26,7 +26,7 @@ export class RateLimitStorage {
    * @param {number} ttl - Time to live in milliseconds
    * @returns {Promise<void>}
    */
-  async set(key, data, ttl) {
+  async set() {
     throw new Error('set() must be implemented');
   }
   
@@ -35,7 +35,7 @@ export class RateLimitStorage {
    * @param {string} key - Rate limit key
    * @returns {Promise<void>}
    */
-  async delete(key) {
+  async delete() {
     throw new Error('delete() must be implemented');
   }
   

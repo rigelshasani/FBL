@@ -46,8 +46,6 @@ export async function rateLimitMiddleware(request, env, options = {}) {
   const {
     windowMs = 60000,      // 1 minute default window
     maxRequests = 100,     // 100 requests per window default
-    skipSuccessfulRequests = false,
-    skipFailedRequests = false,
     keyGenerator = null    // Custom key generator function
   } = options;
   

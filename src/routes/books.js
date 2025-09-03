@@ -13,7 +13,7 @@ import {
 /**
  * Handle GET /books - Book catalog/browse page
  */
-export async function handleBooksPage(request, env) {
+export async function handleBooksPage(request) {
   const url = new URL(request.url);
   const page = parseInt(url.searchParams.get('page')) || 1;
   const category = url.searchParams.get('category') || null;

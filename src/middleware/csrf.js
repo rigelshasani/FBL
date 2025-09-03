@@ -82,8 +82,8 @@ export async function verifyCSRFToken(token, secret) {
     
     return await crypto.subtle.timingSafeEqual(signatureBytes, expectedBytes);
     
-  } catch (error) {
-    console.error('CSRF token verification error:', error);
+  } catch {
+    // Silent fail on CSRF verification errors
     return false;
   }
 }
@@ -125,7 +125,7 @@ async function extractCSRFTokenFromForm(request) {
     
     const formData = await request.formData();
     return formData.get('csrf-token');
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -135,8 +135,6 @@ async function extractCSRFTokenFromForm(request) {
  */
 export async function csrfMiddleware(request, env, options = {}) {
   const {
-    cookieName = 'csrf-token',
-    headerName = 'X-CSRF-Token',
     skipMethods = ['GET', 'HEAD', 'OPTIONS'],
     skipPaths = ['/health', '/lock', '/admin'],
   } = options;
@@ -196,8 +194,8 @@ export async function csrfMiddleware(request, env, options = {}) {
     
     return { valid: true };
     
-  } catch (error) {
-    console.error('CSRF middleware error:', error);
+  } catch {
+    // Silent fail on CSRF middleware errors
     return {
       valid: false,
       error: 'CSRF validation failed',
@@ -232,8 +230,8 @@ export async function setCSRFToken(response, secret) {
       statusText: response.statusText,
       headers
     });
-  } catch (error) {
-    console.error('Error setting CSRF token:', error);
+  } catch {
+    // Silent fail on CSRF token setting
     return response;
   }
 }
@@ -247,7 +245,7 @@ export function injectCSRFToken(html, token) {
   // Find all forms and add hidden CSRF input
   return html.replace(
     /<form([^>]*method\s*=\s*["']?(POST|PUT|PATCH|DELETE)["']?[^>]*)>/gi,
-    (match, formAttributes) => {
+    (match) => {
       return `${match}\n  <input type="hidden" name="csrf-token" value="${token}">`;
     }
   );

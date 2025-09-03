@@ -5,7 +5,7 @@
 
 import { requireAuth } from './middleware/auth.js';
 import { rateLimitMiddleware, rateLimitConfigs, createRateLimitResponse, cleanupRateLimitStore } from './middleware/rateLimit.js';
-import { csrfMiddleware, generateCSRFToken, setCSRFToken, injectCSRFToken } from './middleware/csrf.js';
+import { csrfMiddleware } from './middleware/csrf.js';
 import { securityResponse } from './middleware/securityHeaders.js';
 import { createRequestLogger, PerformanceTracker, logSecurityEvent, getMetricsSnapshot } from './monitoring/logger.js';
 import { memoryManager, initializeMemoryManagement, CleanupScheduler } from './utils/memoryManager.js';
@@ -20,13 +20,8 @@ import {
   handleCategoryBooksAPI
 } from './routes/api.js';
 
-// Helper function to wrap responses with security headers
-function secureResponse(response) {
-  return response ? securityResponse(response) : response;
-}
-
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     // Initialize request tracking
     const requestLogger = createRequestLogger(request);
     const requestTracker = new PerformanceTracker('request_handling', requestLogger);
@@ -284,6 +279,7 @@ export default {
       }
       
       const notFoundResponse = new Response('Not Found', { status: 404 });
+      requestTracker.finish(false, { endpoint: url.pathname, reason: 'not_found' });
       return securityResponse(notFoundResponse);
       
     } catch (error) {
@@ -311,7 +307,7 @@ export default {
 /**
  * Handle authenticated home page - redirect to one-time view
  */
-async function handleHomePage(request, env) {
+async function handleHomePage() {
   // Redirect authenticated home page requests to lock screen for one-time view
   return new Response(null, {
     status: 302,

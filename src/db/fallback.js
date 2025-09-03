@@ -53,14 +53,13 @@ const fallbackBooks = [
 export async function isDatabaseAvailable(supabase) {
   try {
     // Simple connectivity test
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from('categories')
       .select('slug')
       .limit(1);
     
     return !error;
-  } catch (error) {
-    console.warn('Database availability check failed:', error.message);
+  } catch {
     return false;
   }
 }

@@ -338,7 +338,7 @@ export async function checkReviewRateLimit(supabase, ipHash) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    const { data, count } = await db
+    const { count } = await db
       .from('reviews')
       .select('id', { count: 'exact' })
       .eq('ip_hash', ipHash)

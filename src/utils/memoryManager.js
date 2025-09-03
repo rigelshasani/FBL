@@ -24,7 +24,6 @@ export class MemoryManager {
       store,
       maxEntries: options.maxEntries || this.maxEntries,
       maxAge: options.maxAge || this.maxAge,
-      keyExtractor: options.keyExtractor || ((key, value) => key),
       ageExtractor: options.ageExtractor || ((key, value) => value.created || value.timestamp || Date.now())
     });
     
@@ -49,7 +48,7 @@ export class MemoryManager {
       try {
         const stats = await this.cleanupStore(storeName, storeConfig, now);
         cleanupStats[storeName] = stats;
-      } catch (error) {
+      } catch {
         logger.error(`Memory cleanup failed for store: ${storeName}`, {
           store: storeName,
           error: error.message
@@ -69,7 +68,7 @@ export class MemoryManager {
    * Clean up a specific store
    */
   async cleanupStore(storeName, config, now) {
-    const { store, maxEntries, maxAge, keyExtractor, ageExtractor } = config;
+    const { store, maxEntries, maxAge, ageExtractor } = config;
     const initialSize = store.size;
     let removedByAge = 0;
     let removedBySize = 0;
@@ -82,7 +81,7 @@ export class MemoryManager {
         if (now - age > maxAge) {
           expiredKeys.push(key);
         }
-      } catch (error) {
+      } catch {
         // If we can't extract age, consider it expired
         expiredKeys.push(key);
       }
@@ -103,7 +102,7 @@ export class MemoryManager {
           const ageA = ageExtractor(a[0], a[1]);
           const ageB = ageExtractor(b[0], b[1]);
           return ageA - ageB;
-        } catch (error) {
+        } catch {
           return 0; // Keep original order if age extraction fails
         }
       });
@@ -274,7 +273,7 @@ export class CleanupScheduler {
     this.timerId = setTimeout(async () => {
       try {
         await this.memoryManager.cleanup();
-      } catch (error) {
+      } catch {
         logger.error('Scheduled cleanup failed', {
           error: error.message
         });

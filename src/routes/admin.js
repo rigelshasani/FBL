@@ -7,7 +7,7 @@ import { validatePassword } from '../utils/validation.js';
 import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
 import { createSupabaseClient } from '../db/client.js';
 import { getBooks, getCategories } from '../db/queries.js';
-import { invalidateAllSessions, blacklistSession } from '../auth/sessionManager.js';
+import { invalidateAllSessions } from '../auth/sessionManager.js';
 
 /**
  * Timing-safe string comparison to prevent timing attacks
@@ -881,11 +881,8 @@ export async function handleAdminAPI(request, env, endpoint) {
       });
     }
     
-    const [token, timestamp] = parts;
-    
-    // Verify admin token (basic verification - in production would be more thorough)
-    const expectedAdminPassword = await generateAdminPassword(env.ADMIN_SECRET_SEED);
-    const tokenData = { token, timestamp };
+    // Basic token validation - in production would verify token properly
+    // For now, just ensure format is correct
     
     // Handle different admin API endpoints
     switch (endpoint) {

@@ -2,7 +2,7 @@
  * Authentication middleware for gate protection
  */
 
-import { validateAuthCookie } from '../auth/gate.js';
+// Auth middleware - gate validation handled in lock.js
 import { isSessionBlacklisted, isSessionGloballyInvalid, extractSessionTimestamp } from '../auth/sessionManager.js';
 
 /**
@@ -65,7 +65,7 @@ async function validateBearerToken(token, env) {
     const isValid = await crypto.subtle.timingSafeEqual(signatureBytes, expectedBytes);
     return { valid: isValid };
     
-  } catch (error) {
+  } catch {
     return { valid: false };
   }
 }
@@ -144,7 +144,7 @@ async function validateSessionCookie(cookieHeader, env) {
     const isValid = await crypto.subtle.timingSafeEqual(signatureBytes, expectedBytes);
     return { valid: isValid };
     
-  } catch (error) {
+  } catch {
     return { valid: false };
   }
 }

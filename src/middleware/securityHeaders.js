@@ -227,7 +227,7 @@ export function isTrustedOrigin(origin, trustedOrigins = []) {
 /**
  * Apply security headers for different response types
  */
-export function securityResponse(originalResponse, options = {}) {
+export function securityResponse(originalResponse) {
   const contentType = originalResponse.headers.get('Content-Type') || '';
   
   let configType = 'html';
