@@ -158,6 +158,55 @@ export function validateContentType(contentType, allowedTypes = ['text/plain', '
 }
 
 /**
+ * Validate review content
+ */
+export function validateReview(stars, body) {
+  const errors = [];
+  
+  // Validate stars
+  const starsNum = parseInt(stars, 10);
+  if (isNaN(starsNum) || starsNum < 1 || starsNum > 5) {
+    errors.push('Stars must be between 1 and 5');
+  }
+  
+  // Validate body
+  if (!body || typeof body !== 'string') {
+    errors.push('Review body is required');
+  } else {
+    const sanitizedBody = sanitizeString(body, 2000);
+    if (sanitizedBody.length < 10) {
+      errors.push('Review must be at least 10 characters');
+    }
+    if (sanitizedBody.length > 2000) {
+      errors.push('Review must be less than 2000 characters');
+    }
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    stars: starsNum,
+    body: body ? sanitizeString(body, 2000) : ''
+  };
+}
+
+/**
+ * Validate IP hash format
+ */
+export function validateIPHash(ipHash) {
+  if (!ipHash || typeof ipHash !== 'string') {
+    return { valid: false, error: 'IP hash is required' };
+  }
+  
+  // Should be hex string from SHA-256 (64 chars) or truncated (16 chars)
+  if (!/^[a-f0-9]{16,64}$/i.test(ipHash)) {
+    return { valid: false, error: 'Invalid IP hash format' };
+  }
+  
+  return { valid: true, value: ipHash.toLowerCase() };
+}
+
+/**
  * Rate limiting validation
  */
 export function validateRateLimit(requests, windowMs = 60000, maxRequests = 100) {

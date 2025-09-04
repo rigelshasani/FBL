@@ -12,6 +12,13 @@ import {
   getFallbackBooksByCategory,
   createOfflineResponse
 } from './fallback.js';
+import { 
+  validatePagination,
+  validateSearchQuery,
+  validateCategory,
+  validateBookSlug,
+  sanitizeString
+} from '../utils/validation.js';
 
 /**
  * Get paginated list of books with optional filters
@@ -20,7 +27,7 @@ import {
  * @returns {Promise<object>} Books with pagination info
  */
 export async function getBooks(supabase, options = {}) {
-  const {
+  let {
     page = 1,
     limit = 20,
     category = null,
@@ -28,6 +35,60 @@ export async function getBooks(supabase, options = {}) {
     search = null,
     sort = 'created_at'
   } = options;
+  
+  // Input validation
+  const paginationValidation = validatePagination(limit, (page - 1) * limit);
+  if (!paginationValidation.valid) {
+    return {
+      data: null,
+      error: { message: paginationValidation.errors.join(', ') }
+    };
+  }
+  
+  // Use validated pagination values
+  limit = paginationValidation.limit;
+  page = Math.max(1, Math.ceil(paginationValidation.offset / limit) + 1);
+  
+  // Validate category if provided
+  if (category) {
+    const categoryValidation = validateCategory(category);
+    if (!categoryValidation.valid) {
+      return {
+        data: null,
+        error: { message: categoryValidation.error }
+      };
+    }
+    category = categoryValidation.value;
+  }
+  
+  // Validate search query if provided  
+  if (search) {
+    const searchValidation = validateSearchQuery(search);
+    if (!searchValidation.valid) {
+      return {
+        data: null,
+        error: { message: searchValidation.error }
+      };
+    }
+    search = searchValidation.value;
+  }
+  
+  // Validate and sanitize language
+  if (language) {
+    language = sanitizeString(language, 10);
+    if (!/^[a-z]{2,5}$/.test(language)) {
+      return {
+        data: null,
+        error: { message: 'Invalid language code format' }
+      };
+    }
+  }
+  
+  // Validate sort parameter
+  const allowedSorts = ['created_at', 'title', 'author', 'year'];
+  if (sort && !allowedSorts.includes(sort)) {
+    sort = 'created_at'; // Default to safe value
+  }
   
   // Check database availability first
   const dbAvailable = await isDatabaseAvailable(supabase);
@@ -80,7 +141,7 @@ export async function getBooks(supabase, options = {}) {
         pages: Math.ceil(totalCount / limit)
       }
     };
-  });
+  }, 'select', 'books_with_categories');
 }
 
 /**
@@ -90,10 +151,28 @@ export async function getBooks(supabase, options = {}) {
  * @returns {Promise<object>} Book data
  */
 export async function getBookBySlug(supabase, slug) {
+  // Input validation
+  if (!slug) {
+    return {
+      data: null,
+      error: { message: 'Book slug is required' }
+    };
+  }
+  
+  const slugValidation = validateBookSlug(slug);
+  if (!slugValidation.valid) {
+    return {
+      data: null,
+      error: { message: slugValidation.error }
+    };
+  }
+  
+  const validatedSlug = slugValidation.value;
+  
   // Check database availability first
   const dbAvailable = await isDatabaseAvailable(supabase);
   if (!dbAvailable) {
-    const fallbackData = getFallbackBookBySlug(slug);
+    const fallbackData = getFallbackBookBySlug(validatedSlug);
     if (fallbackData.data) {
       return createOfflineResponse('book details', fallbackData);
     }
@@ -104,9 +183,9 @@ export async function getBookBySlug(supabase, slug) {
     return db
       .from('books_with_categories')
       .select('*')
-      .eq('slug', slug)
+      .eq('slug', validatedSlug)
       .single();
-  });
+  }, 'select', 'books_with_categories');
 }
 
 /**
@@ -150,12 +229,52 @@ export async function getBookWithStats(supabase, slug) {
  * @returns {Promise<object>} Search results
  */
 export async function searchBooks(supabase, query, options = {}) {
-  const { limit = 20, category = null } = options;
+  let { limit = 20, category = null } = options;
+  
+  // Input validation
+  if (!query) {
+    return {
+      data: null,
+      error: { message: 'Search query is required' }
+    };
+  }
+  
+  const queryValidation = validateSearchQuery(query);
+  if (!queryValidation.valid) {
+    return {
+      data: null,
+      error: { message: queryValidation.error }
+    };
+  }
+  
+  const validatedQuery = queryValidation.value;
+  
+  // Validate pagination
+  const paginationValidation = validatePagination(limit, 0);
+  if (!paginationValidation.valid) {
+    return {
+      data: null,
+      error: { message: paginationValidation.errors.join(', ') }
+    };
+  }
+  limit = paginationValidation.limit;
+  
+  // Validate category if provided
+  if (category) {
+    const categoryValidation = validateCategory(category);
+    if (!categoryValidation.valid) {
+      return {
+        data: null,
+        error: { message: categoryValidation.error }
+      };
+    }
+    category = categoryValidation.value;
+  }
   
   // Check database availability first
   const dbAvailable = await isDatabaseAvailable(supabase);
   if (!dbAvailable) {
-    const fallbackData = getFallbackSearchResults(query, { limit, category });
+    const fallbackData = getFallbackSearchResults(validatedQuery, { limit, category });
     return createOfflineResponse('search', fallbackData);
   }
   
@@ -163,14 +282,14 @@ export async function searchBooks(supabase, query, options = {}) {
     let search = db
       .from('books_with_categories')
       .select('id, slug, title, author, summary, categories, category_names')
-      .textSearch('search_vector', query);
+      .textSearch('search_vector', validatedQuery);
     
     if (category) {
       search = search.contains('categories', [category]);
     }
     
     return search.limit(limit);
-  });
+  }, 'search', 'books_with_categories');
 }
 
 /**
@@ -191,7 +310,7 @@ export async function getCategories(supabase) {
       .from('categories')
       .select('*')
       .order('name');
-  });
+  }, 'select', 'categories');
 }
 
 /**
@@ -202,23 +321,53 @@ export async function getCategories(supabase) {
  * @returns {Promise<object>} Books in category
  */
 export async function getBooksByCategory(supabase, categorySlug, options = {}) {
-  const { limit = 20, offset = 0 } = options;
+  let { limit = 20, offset = 0 } = options;
+  
+  // Input validation
+  if (!categorySlug) {
+    return {
+      data: null,
+      error: { message: 'Category slug is required' }
+    };
+  }
+  
+  const categoryValidation = validateCategory(categorySlug);
+  if (!categoryValidation.valid) {
+    return {
+      data: null,
+      error: { message: categoryValidation.error }
+    };
+  }
+  
+  const validatedCategorySlug = categoryValidation.value;
+  
+  // Validate pagination
+  const paginationValidation = validatePagination(limit, offset);
+  if (!paginationValidation.valid) {
+    return {
+      data: null,
+      error: { message: paginationValidation.errors.join(', ') }
+    };
+  }
+  
+  limit = paginationValidation.limit;
+  offset = paginationValidation.offset;
   
   // Check database availability first
   const dbAvailable = await isDatabaseAvailable(supabase);
   if (!dbAvailable) {
-    const fallbackData = getFallbackBooksByCategory(categorySlug, { limit, offset });
-    return createOfflineResponse(`${categorySlug} category browsing`, fallbackData);
+    const fallbackData = getFallbackBooksByCategory(validatedCategorySlug, { limit, offset });
+    return createOfflineResponse(`${validatedCategorySlug} category browsing`, fallbackData);
   }
   
   return executeQuery(supabase, async (db) => {
     return db
       .from('books_with_categories')
       .select('*')
-      .contains('categories', [categorySlug])
+      .contains('categories', [validatedCategorySlug])
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
-  });
+  }, 'select', 'books_with_categories');
 }
 
 /**
@@ -228,17 +377,79 @@ export async function getBooksByCategory(supabase, categorySlug, options = {}) {
  * @returns {Promise<object>} Created book
  */
 export async function createBook(supabase, bookData) {
-  const {
+  let {
     slug,
     title,
     author,
     year,
     language = 'en',
     summary,
-    cover_key,
-    formats,
     categories = []
   } = bookData;
+  
+  const { cover_key, formats } = bookData;
+  
+  // Input validation
+  if (!slug || !title || !author) {
+    return {
+      data: null,
+      error: { message: 'Book slug, title, and author are required' }
+    };
+  }
+  
+  // Validate slug
+  const slugValidation = validateBookSlug(slug);
+  if (!slugValidation.valid) {
+    return {
+      data: null,
+      error: { message: slugValidation.error }
+    };
+  }
+  slug = slugValidation.value;
+  
+  // Sanitize and validate other fields
+  title = sanitizeString(title, 200);
+  author = sanitizeString(author, 100);
+  summary = summary ? sanitizeString(summary, 2000) : null;
+  
+  if (!title || !author) {
+    return {
+      data: null,
+      error: { message: 'Title and author cannot be empty after sanitization' }
+    };
+  }
+  
+  // Validate year
+  if (year !== null && year !== undefined) {
+    const yearNum = parseInt(year, 10);
+    if (isNaN(yearNum) || yearNum < -3000 || yearNum > new Date().getFullYear()) {
+      return {
+        data: null,
+        error: { message: 'Invalid publication year' }
+      };
+    }
+    year = yearNum;
+  }
+  
+  // Validate language code
+  if (language) {
+    language = sanitizeString(language, 10).toLowerCase();
+    if (!/^[a-z]{2,5}$/.test(language)) {
+      language = 'en'; // Default to English if invalid
+    }
+  }
+  
+  // Validate categories
+  if (categories && categories.length > 0) {
+    const validatedCategories = [];
+    for (const cat of categories) {
+      const catValidation = validateCategory(cat);
+      if (catValidation.valid) {
+        validatedCategories.push(catValidation.value);
+      }
+    }
+    categories = validatedCategories;
+  }
   
   return executeQuery(supabase, async (db) => {
     // Insert book
@@ -274,7 +485,7 @@ export async function createBook(supabase, bookData) {
     }
     
     return { data: book };
-  });
+  }, 'insert', 'books');
 }
 
 /**
