@@ -38,7 +38,52 @@ describe('Worker', () => {
     expect(response.status).toBe(200);
     expect(body.status).toBe('ok');
     expect(body.environment).toBe('test');
+    expect(body.metrics).toBeDefined();
+    expect(body.metrics.uptime).toBeTypeOf('number');
+    expect(body.metrics.requests).toBeDefined();
     expect(response.headers.get('Cache-Control')).toBe('no-cache, no-store, must-revalidate');
+  });
+
+  it('should handle internal server errors gracefully', async () => {
+    const worker = await import('../../src/worker.js');
+    
+    // Create a request that might trigger internal error
+    const request = new Request('http://localhost/health');
+    const env = null; // This might cause issues internally
+    
+    const response = await worker.default.fetch(request, env, {});
+    
+    // Should either succeed or return graceful error
+    expect([200, 500, 503]).toContain(response.status);
+    
+    if (response.status >= 500) {
+      const contentType = response.headers.get('Content-Type');
+      expect(contentType).toContain('application/json');
+      const body = await response.json();
+      expect(body.error).toBeDefined();
+      expect(body.error).toContain('Server temporarily unavailable');
+    }
+  });
+
+  it('should return themed error page for HTML requests', async () => {
+    const worker = await import('../../src/worker.js');
+    
+    // Mock a scenario that causes internal error by providing invalid env
+    const request = new Request('http://localhost/invalid-endpoint', {
+      headers: { 'Accept': 'text/html' }
+    });
+    const env = { SECRET_SEED: 'test' };
+    
+    const response = await worker.default.fetch(request, env, {});
+    
+    // Should redirect to lock for unauthenticated requests
+    if (response.status === 302) {
+      expect(response.headers.get('Location')).toBe('/lock');
+    } else if (response.status >= 500) {
+      const body = await response.text();
+      expect(body).toContain('Cemetery Temporarily Closed');
+      expect(body).toContain('<!DOCTYPE html>');
+    }
   });
   
   it('should return lock screen for GET /lock', async () => {

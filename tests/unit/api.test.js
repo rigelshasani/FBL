@@ -48,6 +48,29 @@ describe('Books API', () => {
       expect(data.pagination.total).toBe(1);
     });
 
+    it('should handle database errors gracefully', async () => {
+      getBooks.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Unable to load books from cemetery archives',
+          code: 'CONNECTION_ERROR',
+          retryable: true
+        }
+      });
+
+      const request = new Request('http://localhost/api/books');
+      const env = { SUPABASE_URL: 'test', SUPABASE_SERVICE_ROLE_KEY: 'test' };
+      
+      const response = await handleBooksAPI(request, env);
+      const data = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(data.books).toEqual([]);
+      expect(data.offline).toBe(true);
+      expect(data.message).toBe('Unable to load books from cemetery archives');
+      expect(data.pagination.total).toBe(0);
+    });
+
     it('should handle query parameters', async () => {
       getBooks.mockResolvedValue({
         data: [],
@@ -106,7 +129,30 @@ describe('Books API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(404);
-      expect(data.error).toBe('Book not found');
+      expect(data.book).toBeNull();
+      expect(data.message).toBe('This volume has been lost to the cemetery mists');
+    });
+
+    it('should handle database errors gracefully', async () => {
+      getBookBySlug.mockResolvedValue({
+        data: null,
+        error: {
+          message: 'Cemetery archives temporarily unavailable',
+          code: 'CONNECTION_ERROR',
+          retryable: true
+        }
+      });
+
+      const request = new Request('http://localhost/api/books/test-book');
+      const env = { SUPABASE_URL: 'test', SUPABASE_SERVICE_ROLE_KEY: 'test' };
+      
+      const response = await handleBookDetailAPI(request, env, 'test-book');
+      const data = await response.json();
+
+      expect(response.status).toBe(503);
+      expect(data.book).toBeNull();
+      expect(data.offline).toBe(true);
+      expect(data.message).toBe('Cemetery archives temporarily unavailable');
     });
   });
 
@@ -157,7 +203,7 @@ describe('Books API', () => {
       const data = await response.json();
 
       expect(response.status).toBe(400);
-      expect(data.error).toBe('Query must be at least 2 characters');
+      expect(data.error).toBe('Invalid search query');
     });
   });
 });
