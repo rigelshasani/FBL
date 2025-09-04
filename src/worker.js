@@ -306,11 +306,65 @@ export default {
         method: request.method
       });
       
-      const errorResponse = new Response('Internal Server Error', { 
-        status: 500,
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
-      });
-      return securityResponse(errorResponse);
+      // Provide graceful error response based on request type
+      const isAPIRequest = url.pathname.startsWith('/api/');
+      const isPageRequest = !isAPIRequest && request.headers.get('Accept')?.includes('text/html');
+      
+      if (isAPIRequest) {
+        // Return structured error for API requests
+        const errorResponse = new Response(JSON.stringify({
+          error: 'Server temporarily unavailable',
+          code: 'INTERNAL_ERROR',
+          timestamp: new Date().toISOString()
+        }), {
+          status: 500,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        return securityResponse(errorResponse);
+      } else if (isPageRequest) {
+        // Return user-friendly error page
+        const errorHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cemetery Temporarily Closed</title>
+  <style>
+    body { font-family: Georgia, serif; background: #1a1a1a; color: #e8e8e8; text-align: center; padding: 4rem; }
+    .error-box { max-width: 600px; margin: 0 auto; background: rgba(139, 0, 0, 0.1); border: 1px solid rgba(139, 0, 0, 0.3); border-radius: 8px; padding: 2rem; }
+    h1 { color: #d4af37; margin-bottom: 1rem; }
+    .retry-button { display: inline-block; margin-top: 2rem; padding: 1rem 2rem; background: rgba(139, 0, 0, 0.2); border: 1px solid rgba(139, 0, 0, 0.5); color: #e8e8e8; text-decoration: none; border-radius: 4px; transition: all 0.2s; }
+    .retry-button:hover { background: rgba(139, 0, 0, 0.3); }
+  </style>
+</head>
+<body>
+  <div class="error-box">
+    <h1>🏚️ Cemetery Temporarily Closed</h1>
+    <p>The ancient spirits are stirring and the cemetery gates are temporarily sealed.</p>
+    <p>Please try again in a few moments.</p>
+    <a href="/" class="retry-button">Return to Cemetery Entrance</a>
+  </div>
+</body>
+</html>`;
+        const errorResponse = new Response(errorHTML, {
+          status: 500,
+          headers: {
+            'Content-Type': 'text/html; charset=utf-8',
+            'Cache-Control': 'no-cache, no-store, must-revalidate'
+          }
+        });
+        return securityResponse(errorResponse);
+      } else {
+        // Default plain text response
+        const errorResponse = new Response('Service temporarily unavailable', {
+          status: 500,
+          headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+        });
+        return securityResponse(errorResponse);
+      }
     }
   }
 };

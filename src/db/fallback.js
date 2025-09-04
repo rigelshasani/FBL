@@ -52,14 +52,27 @@ const fallbackBooks = [
  */
 export async function isDatabaseAvailable(supabase) {
   try {
-    // Simple connectivity test
-    const { error } = await supabase
+    // Simple connectivity test with timeout
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Database timeout')), 5000)
+    );
+    
+    const queryPromise = supabase
       .from('categories')
       .select('slug')
       .limit(1);
     
+    const { error } = await Promise.race([queryPromise, timeoutPromise]);
+    
     return !error;
-  } catch {
+  } catch (error) {
+    // Log the specific error for monitoring
+    if (typeof globalThis !== 'undefined' && globalThis.logger) {
+      globalThis.logger.warn('Database availability check failed', {
+        error: error.message,
+        code: error.code
+      });
+    }
     return false;
   }
 }

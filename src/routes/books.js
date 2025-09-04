@@ -14,7 +14,7 @@ export async function handleBooksPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${search ? `Search: ${search}` : (category ? `${category} Books` : 'Book Catalog')} - Cemetery of Forgotten Books</title>
+  <title>Book Catalog - Cemetery of Forgotten Books</title>
   <meta name="description" content="Browse the collection of forgotten books">
   <meta name="robots" content="noindex, nofollow">
   <style>

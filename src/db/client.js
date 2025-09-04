@@ -51,9 +51,19 @@ export async function executeQuery(supabase, queryFn, operation = 'query', table
     const result = await queryFn(supabase);
     
     if (result.error) {
-      tracker.error(new Error(result.error.message), { table, operation });
+      const error = new Error(`Database error: ${result.error.message}`);
+      tracker.error(error, { table, operation });
       logDatabaseOperation(operation, table, Date.now() - tracker.startTime, false, result.error);
-      throw new Error(`Database error: ${result.error.message}`);
+      
+      // Return graceful error response based on operation type
+      return {
+        data: null,
+        error: {
+          message: getGracefulErrorMessage(operation, result.error),
+          code: result.error.code || 'DATABASE_ERROR',
+          details: result.error.details
+        }
+      };
     }
     
     const duration = tracker.finish(true, { 
@@ -68,6 +78,51 @@ export async function executeQuery(supabase, queryFn, operation = 'query', table
   } catch (error) {
     tracker.error(error, { table, operation });
     logDatabaseOperation(operation, table, Date.now() - tracker.startTime, false, error);
-    throw error;
+    
+    // Return graceful fallback response for network/connection errors
+    return {
+      data: null,
+      error: {
+        message: 'Cemetery archives temporarily unavailable. Please try again later.',
+        code: 'CONNECTION_ERROR',
+        retryable: true
+      }
+    };
   }
+}
+
+/**
+ * Get user-friendly error message based on operation type
+ * @param {string} operation - Database operation
+ * @param {object} error - Database error
+ * @returns {string} User-friendly error message
+ */
+function getGracefulErrorMessage(operation, error) {
+  if (error.code === 'PGRST116') {
+    // Row not found
+    switch (operation) {
+      case 'select':
+        return 'The requested item could not be found in the cemetery archives.';
+      default:
+        return 'The requested resource does not exist.';
+    }
+  }
+  
+  if (error.code === '42703') {
+    // Column does not exist
+    return 'The cemetery catalogs are being reorganized. Please try again later.';
+  }
+  
+  if (error.code === '23505') {
+    // Unique violation
+    return 'This item already exists in the cemetery records.';
+  }
+  
+  if (error.code === '23503') {
+    // Foreign key violation
+    return 'Cannot complete operation due to related cemetery records.';
+  }
+  
+  // Default graceful message
+  return 'The cemetery spirits encountered an issue. Please try again.';
 }

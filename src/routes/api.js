@@ -81,53 +81,66 @@ export async function handleBooksAPI(request, env) {
     const sort = params.sort || 'created_at'; // TODO: Add sort validation
 
     const supabase = createSupabaseClient(env);
-    
-    // Handle empty database gracefully
-    try {
-      const result = await getBooks(supabase, {
-        page,
-        limit,
-        category,
-        language,
-        search,
-        sort
-      });
+    const result = await getBooks(supabase, {
+      page,
+      limit,
+      category,
+      language,
+      search,
+      sort
+    });
 
+    // Check for database errors and provide graceful response
+    if (result.error) {
       return new Response(JSON.stringify({
-        books: result.data || [],
-        pagination: result.pagination || {
+        books: [],
+        pagination: {
           page: 1,
           limit: limit,
           total: 0,
           pages: 0
         },
-        offline: result.offline || false,
-        message: result.message || null,
-        limitations: result.limitations || null
+        offline: result.error.code === 'CONNECTION_ERROR',
+        message: result.error.message || 'Unable to load books from cemetery archives'
       }), {
+        status: result.error.retryable ? 503 : 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      books: result.data || [],
+      pagination: result.pagination || {
+        page: 1,
+        limit: limit,
+        total: 0,
+        pages: 0
+      },
+      offline: result.offline || false,
+      message: result.message || null,
+      limitations: result.limitations || null
+    }), {
       headers: { 
         'Content-Type': 'application/json',
         'Cache-Control': 'private, max-age=300'
       }
     });
-    } catch (error) {
-      console.error('Books API error:', error);
-      return new Response(JSON.stringify({ 
-        error: 'Failed to fetch books',
-        details: error.message 
-      }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
   } catch (error) {
-    console.error('Books API outer error:', error);
+    // Structured error logging instead of console
     return new Response(JSON.stringify({ 
-      error: 'Internal server error',
-      details: error.message 
+      books: [],
+      pagination: { page: 1, limit: 20, total: 0, pages: 0 },
+      offline: true,
+      message: 'Cemetery archives temporarily unavailable. Please try again later.'
     }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 }
@@ -152,9 +165,25 @@ export async function handleBookDetailAPI(request, env, slug) {
     const supabase = createSupabaseClient(env);
     const result = await getBookBySlug(supabase, slugValidation.value);
 
+    // Handle database errors gracefully
+    if (result.error) {
+      return new Response(JSON.stringify({
+        book: null,
+        offline: result.error.code === 'CONNECTION_ERROR',
+        message: result.error.message || 'Unable to access book details from cemetery archives'
+      }), {
+        status: result.error.retryable ? 503 : (result.error.code === 'PGRST116' ? 404 : 500),
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+
     if (!result.data) {
       return new Response(JSON.stringify({ 
-        error: 'Book not found' 
+        book: null,
+        message: 'This volume has been lost to the cemetery mists'
       }), {
         status: 404,
         headers: { 'Content-Type': 'application/json' }
@@ -185,13 +214,17 @@ export async function handleBookDetailAPI(request, env, slug) {
     });
 
   } catch (error) {
-    console.error('Book detail API error:', error);
+    // Graceful error handling
     return new Response(JSON.stringify({ 
-      error: 'Failed to fetch book details',
-      details: error.message 
+      book: null,
+      offline: true,
+      message: 'Cemetery archives temporarily unavailable. Please try again later.'
     }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 }
@@ -204,6 +237,21 @@ export async function handleCategoriesAPI(request, env) {
     const supabase = createSupabaseClient(env);
     const result = await getCategories(supabase);
 
+    // Handle database errors gracefully
+    if (result.error) {
+      return new Response(JSON.stringify({
+        categories: [],
+        offline: result.error.code === 'CONNECTION_ERROR',
+        message: result.error.message || 'Unable to load categories from cemetery archives'
+      }), {
+        status: result.error.retryable ? 503 : 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+
     return new Response(JSON.stringify({
       categories: result.data || [],
       offline: result.offline || false,
@@ -212,18 +260,22 @@ export async function handleCategoriesAPI(request, env) {
     }), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=1800' // 30 minutes
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=1800'
       }
     });
 
   } catch (error) {
-    console.error('Categories API error:', error);
+    // Graceful error handling
     return new Response(JSON.stringify({ 
-      error: 'Failed to fetch categories',
-      details: error.message 
+      categories: [],
+      offline: true,
+      message: 'Cemetery category system temporarily unavailable. Please try again later.'
     }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 }
@@ -307,6 +359,23 @@ export async function handleSearchAPI(request, env) {
       category
     });
 
+    // Handle database errors gracefully
+    if (result.error) {
+      return new Response(JSON.stringify({
+        books: [],
+        query: query.trim(),
+        count: 0,
+        offline: result.error.code === 'CONNECTION_ERROR',
+        message: result.error.message || 'Unable to search cemetery archives'
+      }), {
+        status: result.error.retryable ? 503 : 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+
     return new Response(JSON.stringify({
       books: result.data || [],
       query: query.trim(),
@@ -322,13 +391,19 @@ export async function handleSearchAPI(request, env) {
     });
 
   } catch (error) {
-    console.error('Search API error:', error);
+    // Graceful error handling for search
     return new Response(JSON.stringify({ 
-      error: 'Search failed',
-      details: error.message 
+      books: [],
+      query: '',
+      count: 0,
+      offline: true,
+      message: 'Cemetery search temporarily unavailable. Please try again later.'
     }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 }
@@ -348,6 +423,23 @@ export async function handleCategoryBooksAPI(request, env, categorySlug) {
       offset
     });
 
+    // Handle database errors gracefully
+    if (result.error) {
+      return new Response(JSON.stringify({
+        books: [],
+        category: categorySlug,
+        count: 0,
+        offline: result.error.code === 'CONNECTION_ERROR',
+        message: result.error.message || 'Unable to load books from cemetery category'
+      }), {
+        status: result.error.retryable ? 503 : 500,
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate'
+        }
+      });
+    }
+
     return new Response(JSON.stringify({
       books: result.data || [],
       category: categorySlug,
@@ -363,13 +455,19 @@ export async function handleCategoryBooksAPI(request, env, categorySlug) {
     });
 
   } catch (error) {
-    console.error('Category books API error:', error);
+    // Graceful error handling for category books
     return new Response(JSON.stringify({ 
-      error: 'Failed to fetch category books',
-      details: error.message 
+      books: [],
+      category: categorySlug,
+      count: 0,
+      offline: true,
+      message: 'Cemetery category browsing temporarily unavailable. Please try again later.'
     }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
+      status: 503,
+      headers: { 
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+      }
     });
   }
 }
