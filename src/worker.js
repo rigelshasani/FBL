@@ -12,6 +12,8 @@ import { memoryManager, initializeMemoryManagement, CleanupScheduler } from './u
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
+import { handleHomePage } from './routes/home.js';
+import { handleBookDownload } from './routes/download.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -212,7 +214,8 @@ export default {
       
       // Protected routes
       if (url.pathname === '/') {
-        return await handleHomePage(request, env);
+        requestTracker.finish(true, { endpoint: 'home' });
+        return await handleHomePage();
       }
       
       if (url.pathname === '/books') {
@@ -278,6 +281,14 @@ export default {
         return new Response('Static asset not found', { status: 404 });
       }
       
+      // Download routes
+      const downloadMatch = url.pathname.match(/^\/download\/([^\/]+)\/([^\/]+)$/);
+      if (downloadMatch) {
+        const [, bookSlug, format] = downloadMatch;
+        requestTracker.finish(true, { endpoint: 'download', format });
+        return await handleBookDownload(request, env, bookSlug, format);
+      }
+      
       const notFoundResponse = new Response('Not Found', { status: 404 });
       requestTracker.finish(false, { endpoint: url.pathname, reason: 'not_found' });
       return securityResponse(notFoundResponse);
@@ -304,16 +315,4 @@ export default {
   }
 };
 
-/**
- * Handle authenticated home page - redirect to one-time view
- */
-async function handleHomePage() {
-  // Redirect authenticated home page requests to lock screen for one-time view
-  return new Response(null, {
-    status: 302,
-    headers: {
-      'Location': '/lock',
-      'Cache-Control': 'no-cache, no-store, must-revalidate'
-    }
-  });
-}
+// Home page handler moved to routes/home.js

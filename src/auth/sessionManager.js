@@ -125,7 +125,7 @@ export function extractSessionTimestamp(token) {
     
     const timestamp = parseInt(parts[0], 10);
     return isNaN(timestamp) ? null : timestamp;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

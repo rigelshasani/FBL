@@ -2,22 +2,12 @@
  * Book browsing and detail page routes
  */
 
-import { createSupabaseClient } from '../db/client.js';
-import { 
-  getBooks, 
-  getBookBySlug, 
-  getCategories,
-  searchBooks 
-} from '../db/queries.js';
-
 /**
  * Handle GET /books - Book catalog/browse page
  */
-export async function handleBooksPage(request) {
-  const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get('page')) || 1;
-  const category = url.searchParams.get('category') || null;
-  const search = url.searchParams.get('q') || null;
+export async function handleBooksPage() {
+  // Page uses client-side JavaScript to load data from API
+  // URL parameters are handled by the frontend
 
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -269,16 +259,16 @@ export async function handleBooksPage(request) {
     </header>
     
     <nav class="nav">
-      <a href="/books" ${!category && !search ? 'class="active"' : ''}>All Books</a>
-      <a href="/books?category=fiction" ${category === 'fiction' ? 'class="active"' : ''}>Fiction</a>
-      <a href="/books?category=gothic" ${category === 'gothic' ? 'class="active"' : ''}>Gothic</a>
-      <a href="/books?category=philosophy" ${category === 'philosophy' ? 'class="active"' : ''}>Philosophy</a>
-      <a href="/books?category=classics" ${category === 'classics' ? 'class="active"' : ''}>Classics</a>
+      <a href="/books">All Books</a>
+      <a href="/books?category=fiction">Fiction</a>
+      <a href="/books?category=gothic">Gothic</a>
+      <a href="/books?category=philosophy">Philosophy</a>
+      <a href="/books?category=classics">Classics</a>
       <a href="/">Back to Cemetery</a>
     </nav>
     
     <form class="search-form" method="GET" action="/books">
-      <input type="text" name="q" placeholder="Search books..." value="${search || ''}" />
+      <input type="text" name="q" placeholder="Search books..." value="" />
       <button type="submit">Search</button>
     </form>
     
