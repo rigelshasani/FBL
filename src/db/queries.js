@@ -19,6 +19,7 @@ import {
   validateBookSlug,
   sanitizeString
 } from '../utils/validation.js';
+import { databaseCache, cacheKeys } from '../utils/cache.js';
 
 /**
  * Get paginated list of books with optional filters
@@ -99,7 +100,17 @@ export async function getBooks(supabase, options = {}) {
   
   const offset = (page - 1) * limit;
   
-  return executeQuery(supabase, async (db) => {
+  // Try cache first (for identical queries)
+  const cacheKey = cacheKeys.db('books_with_categories', 'select', {
+    page, limit, category, language, search, sort
+  });
+  
+  const cached = databaseCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  
+  const result = await executeQuery(supabase, async (db) => {
     let query = db
       .from('books_with_categories')
       .select('*', { count: 'exact' });
@@ -126,14 +137,14 @@ export async function getBooks(supabase, options = {}) {
       .order(sortField, { ascending })
       .range(offset, offset + limit - 1);
     
-    const result = await query;
+    const queryResult = await query;
     
     // Handle null count gracefully
-    const totalCount = result.count ?? 0;
+    const totalCount = queryResult.count ?? 0;
     
     return {
-      ...result,
-      data: result.data || [],
+      ...queryResult,
+      data: queryResult.data || [],
       pagination: {
         page,
         limit,
@@ -142,6 +153,13 @@ export async function getBooks(supabase, options = {}) {
       }
     };
   }, 'select', 'books_with_categories');
+  
+  // Cache successful results for 5 minutes
+  if (result.data) {
+    databaseCache.set(cacheKey, result, 5 * 60 * 1000);
+  }
+  
+  return result;
 }
 
 /**

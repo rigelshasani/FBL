@@ -68,7 +68,7 @@ export class DurableObjectsStorage extends RateLimitStorage {
       }
       return null;
     } catch (error) {
-      console.error('Durable Objects get error:', error);
+      // Silent fallback - avoid console.error in production
       return null;
     }
   }
@@ -82,7 +82,10 @@ export class DurableObjectsStorage extends RateLimitStorage {
         body: JSON.stringify({ data, ttl })
       });
     } catch (error) {
-      console.error('Durable Objects set error:', error);
+      // Log error but don't throw to allow fallback
+      if (globalThis.logger) {
+        globalThis.logger.warn('Durable Objects set failed', { error: error.message });
+      }
       throw error;
     }
   }
@@ -93,7 +96,10 @@ export class DurableObjectsStorage extends RateLimitStorage {
       const stub = this.namespace.get(id);
       await stub.fetch('http://rate-limit/delete', { method: 'DELETE' });
     } catch (error) {
-      console.error('Durable Objects delete error:', error);
+      // Silent cleanup failure
+      if (globalThis.logger) {
+        globalThis.logger.debug('Durable Objects delete failed', { error: error.message });
+      }
     }
   }
   

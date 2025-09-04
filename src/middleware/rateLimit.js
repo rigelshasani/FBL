@@ -31,9 +31,20 @@ function getClientIP(request) {
 async function hashIP(ip) {
   const encoder = new TextEncoder();
   const data = encoder.encode(ip + 'rate-limit-salt');
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = new Uint8Array(hashBuffer);
-  return Array.from(hashArray, b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  
+  // Check if crypto.subtle is available
+  if (globalThis.crypto?.subtle?.digest) {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = new Uint8Array(hashBuffer);
+    return Array.from(hashArray, b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+  }
+  
+  // Fallback for environments without crypto.subtle
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) {
+    hash = ((hash << 5) - hash + data[i]) & 0xffffffff;
+  }
+  return Math.abs(hash).toString(16).padStart(16, '0').slice(0, 16);
 }
 
 // Cache storage instance per environment

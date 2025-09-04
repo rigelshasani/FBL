@@ -157,7 +157,9 @@ export const logger = new Logger({
  * Request logger middleware
  */
 export function createRequestLogger(request) {
-  const requestId = crypto.randomUUID();
+  // Use fallback for environments where crypto.randomUUID is not available
+  const requestId = globalThis.crypto?.randomUUID?.() || 
+    Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   const url = new URL(request.url);
   
   // Store request ID globally for this request context

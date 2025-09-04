@@ -48,7 +48,7 @@ export class MemoryManager {
       try {
         const stats = await this.cleanupStore(storeName, storeConfig, now);
         cleanupStats[storeName] = stats;
-      } catch {
+      } catch (error) {
         logger.error(`Memory cleanup failed for store: ${storeName}`, {
           store: storeName,
           error: error.message

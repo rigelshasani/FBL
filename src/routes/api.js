@@ -17,6 +17,7 @@ import {
   validatePagination,
   sanitizeURLParams 
 } from '../utils/validation.js';
+import { responseCache, databaseCache, cacheKeys } from '../utils/cache.js';
 
 /**
  * Handle GET /api/books - List books with pagination and filters
@@ -80,6 +81,23 @@ export async function handleBooksAPI(request, env) {
     const search = validatedSearch;
     const sort = params.sort || 'created_at'; // TODO: Add sort validation
 
+    // Generate cache key for this request
+    const cacheKey = cacheKeys.api('GET', '/api/books', {
+      page, limit, category, language, search, sort
+    });
+    
+    // Try to get from cache first (short TTL for dynamic content)
+    const cached = responseCache.get(cacheKey);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, max-age=60',
+          'X-Cache': 'HIT'
+        }
+      });
+    }
+    
     const supabase = createSupabaseClient(env);
     const result = await getBooks(supabase, {
       page,
@@ -111,7 +129,7 @@ export async function handleBooksAPI(request, env) {
       });
     }
 
-    return new Response(JSON.stringify({
+    const responseData = {
       books: result.data || [],
       pagination: result.pagination || {
         page: 1,
@@ -122,10 +140,18 @@ export async function handleBooksAPI(request, env) {
       offline: result.offline || false,
       message: result.message || null,
       limitations: result.limitations || null
-    }), {
+    };
+    
+    // Cache successful responses (2 minutes for books list)
+    if (result.data) {
+      responseCache.set(cacheKey, responseData, 2 * 60 * 1000);
+    }
+    
+    return new Response(JSON.stringify(responseData), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'private, max-age=300'
+        'Cache-Control': 'private, max-age=120',
+        'X-Cache': 'MISS'
       }
     });
   } catch (error) {
@@ -234,6 +260,19 @@ export async function handleBookDetailAPI(request, env, slug) {
  */
 export async function handleCategoriesAPI(request, env) {
   try {
+    // Categories change infrequently, cache longer
+    const cacheKey = 'api:categories:all';
+    const cached = responseCache.get(cacheKey);
+    if (cached) {
+      return new Response(JSON.stringify(cached), {
+        headers: { 
+          'Content-Type': 'application/json',
+          'Cache-Control': 'private, max-age=1800',
+          'X-Cache': 'HIT'
+        }
+      });
+    }
+    
     const supabase = createSupabaseClient(env);
     const result = await getCategories(supabase);
 
@@ -252,15 +291,23 @@ export async function handleCategoriesAPI(request, env) {
       });
     }
 
-    return new Response(JSON.stringify({
+    const responseData = {
       categories: result.data || [],
       offline: result.offline || false,
       message: result.message || null,
       limitations: result.limitations || null
-    }), {
+    };
+    
+    // Cache categories for 30 minutes
+    if (result.data) {
+      responseCache.set(cacheKey, responseData, 30 * 60 * 1000);
+    }
+    
+    return new Response(JSON.stringify(responseData), {
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=1800'
+        'Cache-Control': result.offline ? 'no-cache' : 'private, max-age=1800',
+        'X-Cache': 'MISS'
       }
     });
 
