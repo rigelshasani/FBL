@@ -2,6 +2,7 @@
  * Admin routes for password management
  */
 
+import { AuthService, AuthType } from '../services/AuthService.js';
 import { generateDailyPassword } from '../auth/gate.js';
 import { validatePassword } from '../utils/validation.js';
 import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
@@ -27,34 +28,12 @@ async function timingSafeEquals(a, b) {
 /**
  * Generate admin password using HMAC-SHA256
  */
+/**
+ * Generate admin password using HMAC-SHA256
+ * @deprecated Use AuthService.generateDailyPassword() instead
+ */
 async function generateAdminPassword(adminSecretSeed, date = new Date()) {
-  if (!adminSecretSeed) {
-    throw new Error('ADMIN_SECRET_SEED is required');
-  }
-  
-  // Get date in UTC timezone  
-  const utcDate = new Date(date.toISOString().split('T')[0] + 'T00:00:00.000Z');
-  const dateString = utcDate.toISOString().split('T')[0]; // YYYY-MM-DD
-  
-  // Create HMAC-SHA256 with 'admin' prefix to make it different from user password
-  const encoder = new TextEncoder();
-  const keyData = encoder.encode(adminSecretSeed);
-  const messageData = encoder.encode(`admin:${dateString}`);
-  
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyData,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
-  const hmac = Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
-  
-  return hmac.slice(0, 12); // 12 chars for admin (vs 8 for regular users)
+  return AuthService.generateDailyPassword(adminSecretSeed, AuthType.ADMIN, date);
 }
 
 /**
