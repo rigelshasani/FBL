@@ -3,7 +3,7 @@
  */
 
 import { logger } from '../monitoring/logger.js';
-import { CACHE, MEMORY } from '../config/constants.js';
+import { CACHE, MEMORY, TIME } from '../config/constants.js';
 
 /**
  * Cache entry with TTL and access tracking
@@ -289,7 +289,7 @@ export const cacheKeys = {
 export class CacheWarmer {
   constructor(cache, options = {}) {
     this.cache = cache;
-    this.warmupInterval = options.warmupInterval || 30 * 60 * 1000; // 30 minutes
+    this.warmupInterval = options.warmupInterval || TIME.THIRTY_MINUTES;
     this.maxConcurrency = options.maxConcurrency || 5;
     this.warmupFunctions = new Map();
   }

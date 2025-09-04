@@ -8,7 +8,8 @@ import { rateLimitMiddleware, rateLimitConfigs, createRateLimitResponse, cleanup
 import { csrfMiddleware } from './middleware/csrf.js';
 import { securityResponse } from './middleware/securityHeaders.js';
 import { createRequestLogger, PerformanceTracker, logSecurityEvent, getMetricsSnapshot } from './monitoring/logger.js';
-import { memoryManager, initializeMemoryManagement, CleanupScheduler } from './utils/memoryManager.js';
+import { memoryManager } from './utils/memoryManager.js';
+import { ensureGlobalState, updateGlobalMetrics } from './utils/GlobalStateManager.js';
 import { handleLockScreen, handleLockSubmit, handleOneTimeView } from './routes/lock.js';
 import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
@@ -32,17 +33,8 @@ export default {
     const url = new URL(request.url);
     const method = request.method;
     
-    // Set start time for uptime tracking and initialize memory management
-    if (!globalThis.startTime) {
-      globalThis.startTime = Date.now();
-      initializeMemoryManagement();
-      
-      // Start cleanup scheduler
-      if (!globalThis.cleanupScheduler) {
-        globalThis.cleanupScheduler = new CleanupScheduler(memoryManager);
-        globalThis.cleanupScheduler.start();
-      }
-    }
+    // Ensure global state is properly initialized (race-condition safe)
+    await ensureGlobalState();
     
     requestLogger.info('Request received', {
       url: url.pathname + url.search,
@@ -52,10 +44,8 @@ export default {
     try {
       // Cleanup rate limit store and memory periodically (every ~1000 requests)
       if (Math.random() < 0.001) {
-        await Promise.all([
-          cleanupRateLimitStore(env),
-          memoryManager.cleanup()
-        ]);
+        await cleanupRateLimitStore(env);
+        await memoryManager.cleanup();
       }
       
       // Health check (no rate limiting or auth required)

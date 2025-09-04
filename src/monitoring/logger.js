@@ -2,6 +2,8 @@
  * Structured logging and monitoring utilities
  */
 
+import { MONITORING, TIME } from '../config/constants.js';
+
 /**
  * Log levels enum
  */
@@ -103,10 +105,8 @@ export class Logger {
         level: levelName
       });
       
-      // Keep only recent errors (last 100)
-      if (metrics.errors.length > 100) {
-        metrics.errors = metrics.errors.slice(-100);
-      }
+      // Keep only recent errors (time and size based cleanup)
+      this.cleanupErrorsArray(metrics.errors);
     }
     
     // Track performance data
@@ -118,11 +118,57 @@ export class Logger {
         success: data.success !== false
       });
       
-      // Keep only recent performance data (last 500)
-      if (metrics.performance.length > 500) {
-        metrics.performance = metrics.performance.slice(-500);
-      }
+      // Keep only recent performance data (time and size based cleanup)
+      this.cleanupPerformanceArray(metrics.performance);
     }
+  }
+  
+  /**
+   * Clean up errors array using time and size based limits
+   * @param {Array} errorsArray - Array of error entries
+   */
+  cleanupErrorsArray(errorsArray) {
+    const now = Date.now();
+    const maxAge = MONITORING.ERROR_LOG_RETENTION;
+    const maxEntries = 100; // Keep reasonable limit
+    
+    // Remove old entries first
+    let cleaned = errorsArray.filter(entry => 
+      (now - entry.timestamp) < maxAge
+    );
+    
+    // Then apply size limit
+    if (cleaned.length > maxEntries) {
+      cleaned = cleaned.slice(-maxEntries);
+    }
+    
+    // Update array in place to maintain reference
+    errorsArray.length = 0;
+    errorsArray.push(...cleaned);
+  }
+  
+  /**
+   * Clean up performance array using time and size based limits
+   * @param {Array} performanceArray - Array of performance entries
+   */
+  cleanupPerformanceArray(performanceArray) {
+    const now = Date.now();
+    const maxAge = MONITORING.PERFORMANCE_LOG_RETENTION;
+    const maxEntries = 500; // Keep reasonable limit
+    
+    // Remove old entries first
+    let cleaned = performanceArray.filter(entry => 
+      (now - entry.timestamp) < maxAge
+    );
+    
+    // Then apply size limit
+    if (cleaned.length > maxEntries) {
+      cleaned = cleaned.slice(-maxEntries);
+    }
+    
+    // Update array in place to maintain reference
+    performanceArray.length = 0;
+    performanceArray.push(...cleaned);
   }
   
   debug(message, data = {}) {
@@ -271,7 +317,7 @@ export function getMetricsSnapshot() {
   const perfStats = {};
   if (metrics.performance.length > 0) {
     const recentPerf = metrics.performance.filter(p => 
-      Date.now() - p.timestamp < 60000 // Last minute
+      Date.now() - p.timestamp < TIME.MINUTE
     );
     
     const operations = {};
