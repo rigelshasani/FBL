@@ -2,6 +2,8 @@
  * Home page route handler
  */
 
+import { AUTH } from '../config/constants.js';
+
 /**
  * Handle authenticated home page - Cemetery entrance
  */
@@ -241,10 +243,10 @@ export async function handleHomePage() {
       window.location.href = '/lock';
     }
     
-    // Auto-expire session after 5 minutes on home page
+    // Auto-expire session after configured time on home page
     setTimeout(() => {
       window.location.href = '/lock';
-    }, 300000); // 5 minutes
+    }, ${AUTH.SESSION_AUTO_EXPIRE});
     
     // Prevent back button caching
     window.addEventListener('pageshow', function(event) {

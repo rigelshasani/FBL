@@ -3,6 +3,7 @@
  */
 
 import { logger } from '../monitoring/logger.js';
+import { CACHE, MEMORY } from '../config/constants.js';
 
 /**
  * Cache entry with TTL and access tracking
@@ -33,9 +34,9 @@ class CacheEntry {
  */
 export class SmartCache {
   constructor(options = {}) {
-    this.maxSize = options.maxSize || 1000;
-    this.defaultTTL = options.defaultTTL || 30 * 60 * 1000; // 30 minutes
-    this.cleanupInterval = options.cleanupInterval || 5 * 60 * 1000; // 5 minutes
+    this.maxSize = options.maxSize || MEMORY.DEFAULT_MAX_ENTRIES;
+    this.defaultTTL = options.defaultTTL || CACHE.API_RESPONSE_TTL;
+    this.cleanupInterval = options.cleanupInterval || CACHE.CLEANUP_INTERVAL;
     this.hitRatio = options.targetHitRatio || 0.8;
     
     this.cache = new Map();
@@ -234,21 +235,21 @@ export class SmartCache {
 
 // Global cache instances for different use cases
 export const responseCache = new SmartCache({
-  maxSize: 500,
-  defaultTTL: 5 * 60 * 1000, // 5 minutes for API responses
-  cleanupInterval: 2 * 60 * 1000 // Cleanup every 2 minutes
+  maxSize: CACHE.RESPONSE_CACHE_SIZE,
+  defaultTTL: CACHE.API_RESPONSE_TTL,
+  cleanupInterval: CACHE.RESPONSE_CACHE_CLEANUP
 });
 
 export const databaseCache = new SmartCache({
-  maxSize: 200,
-  defaultTTL: 10 * 60 * 1000, // 10 minutes for database queries
-  cleanupInterval: 5 * 60 * 1000 // Cleanup every 5 minutes
+  maxSize: CACHE.DATABASE_CACHE_SIZE,
+  defaultTTL: CACHE.DATABASE_QUERY_TTL,
+  cleanupInterval: CACHE.DATABASE_CACHE_CLEANUP
 });
 
 export const authCache = new SmartCache({
-  maxSize: 100,
-  defaultTTL: 15 * 60 * 1000, // 15 minutes for auth tokens
-  cleanupInterval: 3 * 60 * 1000 // Cleanup every 3 minutes
+  maxSize: CACHE.AUTH_CACHE_SIZE,
+  defaultTTL: CACHE.AUTH_TOKEN_TTL,
+  cleanupInterval: CACHE.AUTH_CACHE_CLEANUP
 });
 
 /**

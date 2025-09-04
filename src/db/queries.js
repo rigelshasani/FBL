@@ -20,6 +20,7 @@ import {
   sanitizeString
 } from '../utils/validation.js';
 import { databaseCache, cacheKeys } from '../utils/cache.js';
+import { DATABASE, CACHE } from '../config/constants.js';
 
 /**
  * Get paginated list of books with optional filters
@@ -30,7 +31,7 @@ import { databaseCache, cacheKeys } from '../utils/cache.js';
 export async function getBooks(supabase, options = {}) {
   let {
     page = 1,
-    limit = 20,
+    limit = DATABASE.DEFAULT_LIMIT,
     category = null,
     language = null,
     search = null,
@@ -154,9 +155,9 @@ export async function getBooks(supabase, options = {}) {
     };
   }, 'select', 'books_with_categories');
   
-  // Cache successful results for 5 minutes
+  // Cache successful results
   if (result.data) {
-    databaseCache.set(cacheKey, result, 5 * 60 * 1000);
+    databaseCache.set(cacheKey, result, CACHE.DATABASE_QUERY_TTL);
   }
   
   return result;

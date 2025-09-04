@@ -19,6 +19,7 @@ import {
 } from '../utils/validation.js';
 import { responseCache, databaseCache, cacheKeys } from '../utils/cache.js';
 import { ErrorResponseFactory } from '../utils/ErrorResponseFactory.js';
+import { CACHE } from '../config/constants.js';
 
 /**
  * Handle GET /api/books - List books with pagination and filters
@@ -143,9 +144,9 @@ export async function handleBooksAPI(request, env) {
       limitations: result.limitations || null
     };
     
-    // Cache successful responses (2 minutes for books list)
+    // Cache successful responses
     if (result.data) {
-      responseCache.set(cacheKey, responseData, 2 * 60 * 1000);
+      responseCache.set(cacheKey, responseData, CACHE.API_RESPONSE_TTL);
     }
     
     return new Response(JSON.stringify(responseData), {
@@ -291,9 +292,9 @@ export async function handleCategoriesAPI(request, env) {
       limitations: result.limitations || null
     };
     
-    // Cache categories for 30 minutes
+    // Cache categories for longer duration
     if (result.data) {
-      responseCache.set(cacheKey, responseData, 30 * 60 * 1000);
+      responseCache.set(cacheKey, responseData, CACHE.CATEGORIES_TTL);
     }
     
     return new Response(JSON.stringify(responseData), {
