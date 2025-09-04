@@ -14,6 +14,7 @@ import { handleBooksPage, handleBookDetailPage } from './routes/books.js';
 import { handleAdminLogin, handleAdminSubmit, handleAdminPanel, handleAdminAPI } from './routes/admin.js';
 import { handleHomePage } from './routes/home.js';
 import { handleBookDownload } from './routes/download.js';
+import { ErrorResponseFactory } from './utils/ErrorResponseFactory.js';
 import { 
   handleBooksAPI,
   handleBookDetailAPI, 
@@ -200,10 +201,7 @@ export default {
             if (categoryMatch) {
               response = await handleCategoryBooksAPI(request, env, categoryMatch[1]);
             } else {
-              response = new Response(JSON.stringify({ error: 'API endpoint not found' }), {
-                status: 404,
-                headers: { 'Content-Type': 'application/json' }
-              });
+              response = ErrorResponseFactory.unknownEndpoint();
             }
           }
         }

@@ -3,6 +3,7 @@
  */
 
 import { AuthService, AuthType } from '../services/AuthService.js';
+import { ErrorResponseFactory } from '../utils/ErrorResponseFactory.js';
 import { generateDailyPassword } from '../auth/gate.js';
 import { validatePassword } from '../utils/validation.js';
 import { generateCSRFToken, injectCSRFToken } from '../middleware/csrf.js';
@@ -846,18 +847,12 @@ export async function handleAdminAPI(request, env, endpoint) {
     // Verify admin token from header
     const adminToken = request.headers.get('X-Admin-Token');
     if (!adminToken) {
-      return new Response(JSON.stringify({ error: 'Admin token required' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return ErrorResponseFactory.adminTokenRequired();
     }
     
     const parts = adminToken.split(':');
     if (parts.length !== 2) {
-      return new Response(JSON.stringify({ error: 'Invalid admin token' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      return ErrorResponseFactory.invalidCredentials('Invalid admin token');
     }
     
     // Basic token validation - in production would verify token properly
@@ -867,10 +862,7 @@ export async function handleAdminAPI(request, env, endpoint) {
     switch (endpoint) {
       case 'invalidate-sessions':
         if (request.method !== 'POST') {
-          return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-            status: 405,
-            headers: { 'Content-Type': 'application/json' }
-          });
+          return ErrorResponseFactory.methodNotAllowed(request.method, ['GET']);
         }
         
         const success = await invalidateAllSessions(env);
@@ -892,10 +884,7 @@ export async function handleAdminAPI(request, env, endpoint) {
         }
         
       default:
-        return new Response(JSON.stringify({ error: 'Unknown endpoint' }), {
-          status: 404,
-          headers: { 'Content-Type': 'application/json' }
-        });
+        return ErrorResponseFactory.unknownEndpoint();
     }
     
   } catch (error) {

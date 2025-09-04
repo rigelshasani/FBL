@@ -4,6 +4,7 @@
 
 // Auth middleware - gate validation handled in lock.js
 import { isSessionBlacklisted, isSessionGloballyInvalid, extractSessionTimestamp } from '../auth/sessionManager.js';
+import { ErrorResponseFactory } from '../utils/ErrorResponseFactory.js';
 
 /**
  * Validate session token from Authorization header or cookie
@@ -196,13 +197,7 @@ export async function requireAuth(request, env) {
       return null; // Allow access
     }
     // For API requests, always return 401 without valid token
-    return new Response(JSON.stringify({ error: 'Authentication required' }), {
-      status: 401,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
-    });
+    return ErrorResponseFactory.authenticationRequired(request);
   }
   
   // For HTML pages from one-time views, validate the view token

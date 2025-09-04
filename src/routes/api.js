@@ -18,6 +18,7 @@ import {
   sanitizeURLParams 
 } from '../utils/validation.js';
 import { responseCache, databaseCache, cacheKeys } from '../utils/cache.js';
+import { ErrorResponseFactory } from '../utils/ErrorResponseFactory.js';
 
 /**
  * Handle GET /api/books - List books with pagination and filters
@@ -155,18 +156,10 @@ export async function handleBooksAPI(request, env) {
       }
     });
   } catch (error) {
-    // Structured error logging instead of console
-    return new Response(JSON.stringify({ 
+    // Graceful error handling with fallback data
+    return ErrorResponseFactory.serviceUnavailable('cemetery archives', {
       books: [],
-      pagination: { page: 1, limit: 20, total: 0, pages: 0 },
-      offline: true,
-      message: 'Cemetery archives temporarily unavailable. Please try again later.'
-    }), {
-      status: 503,
-      headers: { 
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache, no-store, must-revalidate'
-      }
+      pagination: { page: 1, limit: 20, total: 0, pages: 0 }
     });
   }
 }
